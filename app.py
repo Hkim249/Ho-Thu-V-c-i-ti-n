@@ -189,17 +189,21 @@ def call_gemini(prompt, api_key, model, audio_bytes=None, audio_mime="audio/wav"
         raise RuntimeError("Gemini không trả về nội dung. Hãy thử lại.")
     return json.loads(response.text)
 
-def get_ai_suggestion(description, current_values, api_key, model, audio_bytes=None, audio_mime="audio/wav"):
+def get_ai_suggestion(message, current_values, api_key, model, conversation_history=None, audio_bytes=None, audio_mime="audio/wav"):
+    """Return one consultant response and a fresh formula for the current conversation turn."""
     payload = {
-        "human_scent_request": description or "",
+        "current_user_message": message or "",
+        "conversation_history": conversation_history or [],
         "current_formula_percent": current_values,
         "available_ingredients": list(DEFAULTS.keys()),
         "task": (
-            "Phân tích yêu cầu mùi hương. Nếu có âm thanh đính kèm, hãy nghe và hiểu lời nói trong âm thanh "
-            "rồi kết hợp với phần mô tả văn bản. Đề xuất tỷ lệ phần trăm và giải thích ngắn."
+            "Hãy trò chuyện như một chuyên viên tư vấn nước hoa: phản hồi trực tiếp điều người dùng vừa nói, "
+            "nhớ ngữ cảnh các lượt trước, hỏi thêm khi cần và vẫn đề xuất công thức tốt nhất hiện tại. "
+            "Nếu có âm thanh đính kèm, hãy nghe và hiểu lời nói trong âm thanh. "
+            "Mỗi lượt phải trả lời tự nhiên, hữu ích, không chỉ lặp lại công thức."
         ),
     }
-    prompt = SYSTEM_PROMPT + "\n\nDữ liệu người dùng:\n" + json.dumps(payload, ensure_ascii=False)
+    prompt = SYSTEM_PROMPT + "\n\nDữ liệu cuộc trò chuyện hiện tại:\n" + json.dumps(payload, ensure_ascii=False)
     return call_gemini(prompt, api_key, model, audio_bytes, audio_mime)
 
 async def _generate_vietnamese_audio(text_to_speak):
@@ -230,6 +234,14 @@ if "ai_audio" not in st.session_state:
     st.session_state.ai_audio = None
 if "ai_audio_text" not in st.session_state:
     st.session_state.ai_audio_text = None
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+if "ai_audio_pending" not in st.session_state:
+    st.session_state.ai_audio_pending = False
+if "last_audio_digest" not in st.session_state:
+    st.session_state.last_audio_digest = None
+if "chat_error" not in st.session_state:
+    st.session_state.chat_error = None
 
 try:
     secret_api_key = st.secrets.get("GOOGLE_API_KEY", "")
@@ -310,86 +322,144 @@ with st.sidebar:
     )
     st.divider()
     batch_ml = st.number_input("Dung tích mẻ (mL)", min_value=1.0, max_value=10000.0, value=10.0, step=1.0)
-    st.caption("AI đề xuất tỷ lệ; m cần bấm áp dụng để cập nhật thanh công thức.")
+    st.caption("Mỗi phản hồi tư vấn sẽ tự cập nhật công thức ở các thanh trượt bên phải.")
 
+# Keep all user input handling before slider widgets are instantiated so their values
+# can be updated safely in the same Streamlit rerun.
 left, right = st.columns([1.05, 0.95], gap="large")
 
 with left:
-    st.markdown('<h3 class="description-heading">1. Mô tả mùi hương</h3>', unsafe_allow_html=True)
-    description = st.text_area(
-        "Mùi hương m muốn tạo",
-        placeholder="Ví dụ: Mùi sạch và tươi như vừa tắm, cam nhẹ lúc đầu, không quá ngọt, sau đó ấm và gỗ nhẹ.",
-        height=130,
-    )
+    st.markdown('<h3 class="description-heading">1. Trò chuyện với chuyên viên Thu Vũ</h3>', unsafe_allow_html=True)
+    st.caption("Nhắn bằng văn bản hoặc ghi âm. Bạn có thể trao đổi nhiều lượt để tinh chỉnh mùi hương.")
 
-    st.markdown("**Hoặc mô tả bằng giọng nói**")
-    audio_value = st.audio_input("Ghi âm yêu cầu mùi hương", help="Nói rõ điều m thích hoặc không thích ở mùi hương.")
-    audio_bytes = audio_value.getvalue() if audio_value is not None else None
-    audio_mime = getattr(audio_value, "type", None) or "audio/wav"
+    # Show the persistent conversation.
+    if not st.session_state.chat_history:
+        with st.chat_message("assistant"):
+            st.write("Chào bạn! Mình là chuyên viên tư vấn mùi hương của Thu Vũ. Bạn muốn tạo mùi hương như thế nào? Có thể kể về cảm giác, nguyên liệu yêu thích hoặc hoàn cảnh sử dụng nhé.")
+    else:
+        for message_item in st.session_state.chat_history:
+            with st.chat_message(message_item["role"]):
+                st.write(message_item["content"])
 
-    if st.button("Phân tích bằng Gemini", type="primary", use_container_width=True):
-        if not description.strip() and not audio_bytes:
-            st.warning("Hãy nhập mô tả bằng chữ hoặc ghi âm yêu cầu trước nhé.")
-        elif not api_key.strip():
-            st.error("Chưa có Google Gemini API key. Hãy nhập key ở thanh bên hoặc cấu hình GOOGLE_API_KEY trong Streamlit Secrets.")
+    # Text chat: submission is processed immediately, with no separate Apply button.
+    text_message = st.chat_input("Ví dụ: Mình muốn mùi sạch, tươi, hơi gỗ và không quá ngọt…")
+
+    # Voice chat: record, then explicitly send the recording. Digest prevents duplicate turns
+    # when Streamlit reruns because another widget changed.
+    voice_col, send_col = st.columns([3, 1])
+    with voice_col:
+        voice_value = st.audio_input("Hoặc ghi âm tin nhắn", help="Nói tự nhiên như đang trao đổi với chuyên viên.")
+    voice_bytes = voice_value.getvalue() if voice_value is not None else None
+    voice_mime = getattr(voice_value, "type", None) or "audio/wav"
+    with send_col:
+        st.write("")
+        send_voice = st.button("Gửi giọng nói", use_container_width=True, type="secondary")
+
+    incoming_message = None
+    incoming_audio = None
+    incoming_mime = "audio/wav"
+    incoming_digest = None
+    if text_message and text_message.strip():
+        incoming_message = text_message.strip()
+    elif send_voice and voice_bytes:
+        import hashlib
+        incoming_digest = hashlib.sha256(voice_bytes).hexdigest()
+        if incoming_digest == st.session_state.last_audio_digest:
+            st.info("Tin nhắn ghi âm này đã được gửi rồi. Hãy ghi âm tin mới nếu muốn tiếp tục.")
         else:
-            with st.spinner("Gemini đang phân tích yêu cầu mùi hương…"):
-                try:
-                    st.session_state.ai_result = get_ai_suggestion(
-                        description,
+            incoming_message = "Người dùng gửi tin nhắn thoại. Hãy nghe âm thanh đính kèm và phản hồi nội dung họ nói."
+            incoming_audio = voice_bytes
+            incoming_mime = voice_mime
+
+    if incoming_message is not None:
+        if not api_key.strip():
+            st.error("Chưa có Google Gemini API key. Hãy nhập key ở thanh bên hoặc cấu hình GOOGLE_API_KEY trong Streamlit Secrets.")
+        elif genai is None:
+            st.error("Chưa cài google-genai. Hãy thêm google-genai vào requirements.txt rồi triển khai lại app.")
+        else:
+            # Send prior turns to Gemini as context, excluding any unprocessed turn.
+            history_for_model = [
+                {"role": item["role"], "content": item["content"]}
+                for item in st.session_state.chat_history[-12:]
+            ]
+            try:
+                with st.spinner("Chuyên viên Thu Vũ đang lắng nghe và tư vấn…"):
+                    result = get_ai_suggestion(
+                        incoming_message,
                         st.session_state.formula,
                         api_key.strip(),
                         model.strip(),
-                        audio_bytes=audio_bytes,
-                        audio_mime=audio_mime,
+                        conversation_history=history_for_model,
+                        audio_bytes=incoming_audio,
+                        audio_mime=incoming_mime,
                     )
-                    speech = (
-                        st.session_state.ai_result.get("spoken_response")
-                        or st.session_state.ai_result.get("summary", "")
-                    )
-                    st.session_state.ai_audio_text = speech
-                    st.session_state.ai_audio = None
-                    if speech.strip():
+
+                # Normalize and immediately set slider state before those widgets are created below.
+                updated = normalize_percentages(result.get("percentages", {}))
+                st.session_state.formula = updated.copy()
+                for ingredient, value in updated.items():
+                    st.session_state[f"slider_{ingredient}"] = float(value)
+
+                assistant_reply = str(
+                    result.get("spoken_response")
+                    or result.get("summary")
+                    or "Mình đã cập nhật công thức theo yêu cầu của bạn."
+                ).strip()
+                extra_lines = []
+                question = str(result.get("clarifying_question", "")).strip()
+                if question:
+                    extra_lines.append("Mình hỏi thêm một chút: " + question)
+                reasoning = result.get("reasoning", [])
+                if isinstance(reasoning, list) and reasoning:
+                    extra_lines.append("Lý do đề xuất: " + "; ".join(str(item) for item in reasoning[:4]))
+                intensity = str(result.get("intensity", "")).strip()
+                if intensity:
+                    extra_lines.append("Độ đậm dự kiến: " + intensity + ".")
+                if extra_lines:
+                    assistant_reply += "\n\n" + "\n".join(extra_lines)
+
+                if incoming_audio is not None:
+                    user_display = "🎙️ Tin nhắn thoại đã gửi (Gemini đã phân tích âm thanh)."
+                    st.session_state.last_audio_digest = incoming_digest
+                else:
+                    user_display = incoming_message
+                st.session_state.chat_history.append({"role": "user", "content": user_display})
+                st.session_state.chat_history.append({"role": "assistant", "content": assistant_reply})
+                st.session_state.ai_result = result
+                st.session_state.ai_audio_text = str(result.get("spoken_response") or result.get("summary", "")).strip()
+                st.session_state.ai_audio = None
+                st.session_state.ai_audio_pending = False
+                st.session_state.chat_error = None
+                if st.session_state.ai_audio_text and edge_tts is not None:
+                    try:
                         with st.spinner("Đang tạo giọng đọc tiếng Việt…"):
-                            st.session_state.ai_audio = generate_vietnamese_audio(speech)
-                except json.JSONDecodeError:
-                    st.error("Gemini trả về dữ liệu không đúng JSON. Hãy thử lại.")
-                except Exception as exc:
-                    st.error(f"Không thể tạo kết quả/giọng đọc: {exc}")
+                            st.session_state.ai_audio = generate_vietnamese_audio(st.session_state.ai_audio_text)
+                        st.session_state.ai_audio_pending = bool(st.session_state.ai_audio)
+                    except Exception as tts_exc:
+                        st.session_state.chat_error = "Tư vấn đã có, nhưng chưa tạo được giọng đọc: " + str(tts_exc)
+                st.rerun()
+            except json.JSONDecodeError:
+                st.error("Gemini trả về dữ liệu không đúng JSON. Hãy gửi lại tin nhắn nhé.")
+            except Exception as exc:
+                st.error(f"Không thể xử lý cuộc trò chuyện: {exc}")
 
-    result = st.session_state.ai_result
-    if result:
-        st.markdown("#### Kết quả tư vấn")
-        st.write(result.get("summary", ""))
-        question = result.get("clarifying_question", "")
-        if question:
-            st.info("Gemini muốn hỏi thêm: " + question)
-        for item in result.get("reasoning", []):
-            st.write("• " + str(item))
-        st.caption("Mức độ đậm dự kiến: " + str(result.get("intensity", "chưa xác định")))
+    if st.session_state.chat_error:
+        st.warning(st.session_state.chat_error)
+        st.session_state.chat_error = None
 
-        speech = result.get("spoken_response") or result.get("summary", "")
-        if st.session_state.ai_audio:
-            st.audio(
-                st.session_state.ai_audio,
-                format="audio/mp3",
-                autoplay=True,
-            )
-            st.caption("Giọng đọc tiếng Việt tự phát khi có kết quả. Nếu trình duyệt chặn tự phát, bấm nút phát trên thanh âm thanh.")
-        else:
-            st.warning("Chưa tạo được giọng đọc tự động. Hãy kiểm tra kết nối mạng và cài đặt edge-tts.")
-
-        if st.button("Áp dụng công thức AI đề xuất", use_container_width=True):
-            updated = normalize_percentages(result.get("percentages", {}))
-            st.session_state.formula = updated
-            # Set widget values before those sliders are instantiated on this rerun.
-            for name, value in updated.items():
-                st.session_state[f"slider_{name}"] = float(value)
-            st.rerun()
+    if st.session_state.ai_audio:
+        st.audio(
+            st.session_state.ai_audio,
+            format="audio/mp3",
+            autoplay=st.session_state.ai_audio_pending,
+        )
+        if st.session_state.ai_audio_pending:
+            st.caption("Đang thử tự phát phản hồi bằng giọng tiếng Việt. Nếu trình duyệt chặn, bấm nút phát.")
+            st.session_state.ai_audio_pending = False
 
 with right:
     st.subheader("2. Công thức phối hương")
-    st.caption("Khi áp dụng đề xuất AI, các thanh trượt sẽ tự cập nhật theo tỷ lệ mới.")
+    st.caption("Tỷ lệ sẽ tự cập nhật ngay sau mỗi phản hồi của AI — không cần nút áp dụng.")
     edited = {}
     for name, default in DEFAULTS.items():
         slider_key = f"slider_{name}"
@@ -444,9 +514,10 @@ st.download_button(
 
 with st.expander("Lưu ý quan trọng"):
     st.write(
-        "Phần ghi âm dùng khả năng hiểu âm thanh của Gemini; phần đọc tư vấn dùng giọng tiếng Việt Hoài My Neural qua Edge TTS "
-        "và cần kết nối mạng. Trình duyệt có thể chặn tự phát âm thanh; khi đó hãy bấm nút phát trên thanh âm thanh. AI chỉ diễn giải cảm nhận chủ quan và đề xuất tỷ lệ, "
+        "Bạn có thể trò chuyện nhiều lượt bằng văn bản hoặc ghi âm; Gemini dùng ngữ cảnh các lượt gần nhất để tư vấn. Tỷ lệ AI đề xuất được cập nhật trực tiếp vào thanh trượt. "
+        "Phần đọc tư vấn dùng giọng tiếng Việt Hoài My Neural qua Edge TTS và cần kết nối mạng. Trình duyệt có thể chặn tự phát âm thanh; khi đó hãy bấm nút phát trên thanh âm thanh. AI chỉ diễn giải cảm nhận chủ quan và đề xuất tỷ lệ, "
         "không xác nhận an toàn hoặc bảo đảm hiệu quả lưu hương. Hãy kiểm tra giới hạn sử dụng của từng nguyên liệu "
         "và thử nghiệm quy mô nhỏ trước khi sử dụng."
     )
+
 
