@@ -1,17 +1,17 @@
 import os
 import json
- import streamlit as st
- import pandas as pd
+import streamlit as st
+import pandas as pd
 
- try:
- 	from openai import OpenAI
- except ImportError:
- 	OpenAI = None
+try:
+from openai import OpenAI
+except ImportError:
+OpenAI = None
 
- st.set_page_config(page_title="Thu Vũ AI — Fragrance Studio", page_icon="🌿", layout="wide")
+st.set_page_config(page_title="Thu Vũ AI — Fragrance Studio", page_icon="🌿", layout="wide")
 
- st.title("Thu Vũ AI — Fragrance Studio")
- st.caption("Mô tả mùi hương bạn muốn. AI sẽ chuyển cảm nhận thành gợi ý công thức có thể kiểm tra và chỉnh sửa.")
+st.title("Thu Vũ AI — Fragrance Studio")
+st.caption("Mô tả mùi hương bạn muốn. AI sẽ chuyển cảm nhận thành gợi ý công thức có thể kiểm tra và chỉnh sửa.")
 
  # Formula defaults follow the existing Thu Vũ app's current formulation.
  DEFAULTS = {
