@@ -44,11 +44,11 @@ Khi đã đủ thông tin, trả về một đối tượng JSON theo schema:
   "summary": "mô tả ngắn về mùi hương mục tiêu",
   "clarifying_question": "câu hỏi cần hỏi thêm hoặc chuỗi rỗng",
   "percentages": {
-    "Cam": number,
-    "Gỗ thông": number,
-    "Hoa nhài": number,
-    "Vanilla": number,
-    "Chất định hương": number
+    "Cam": 1.38,
+    "Gỗ thông": 4.83,
+    "Hoa nhài": 2.07,
+    "Vanilla": 1.72,
+    "Chất định hương": 3.00
   },
   "reasoning": ["lý do 1", "lý do 2"],
   "intensity": "nhẹ/vừa/đậm"
@@ -67,7 +67,7 @@ def normalize_percentages(values):
     for key in keys:
         try:
             value = float(values.get(key, DEFAULTS[key]))
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, AttributeError):
             value = DEFAULTS[key]
         cleaned[key] = max(0.0, min(20.0, value))
     # Ensure total concentrate stays below 100%.
@@ -79,24 +79,31 @@ def normalize_percentages(values):
 
 def get_ai_suggestion(description, current_values, api_key, model):
     if genai is None:
-        raise RuntimeError("Chưa cài thư viện openai. Hãy chạy: pip install -r requirements.txt")
-    client = genai(api_key=api_key)
+        raise RuntimeError("Chưa cài thư viện google-genai. Hãy chạy: pip install -r requirements.txt")
+
+    client = genai.Client(api_key=api_key)
     user_payload = {
         "human_scent_request": description,
         "current_formula_percent": current_values,
         "available_ingredients": list(DEFAULTS.keys()),
         "task": "Hiểu yêu cầu mùi hương; nếu thiếu thông tin quan trọng thì hỏi một câu. Nếu đủ, đề xuất tỷ lệ phần trăm."
     }
-    response = client.chat.completions.create(
-        model=model,
-        temperature=0.4,
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)}
-        ],
+    prompt = (
+        SYSTEM_PROMPT
+        + "\n\nDữ liệu người dùng:\n"
+        + json.dumps(user_payload, ensure_ascii=False)
     )
-    return json.loads(response.choices[0].message.content)
+    response = client.models.generate_content(
+        model=model,
+        contents=prompt,
+        config={
+            "response_mime_type": "application/json",
+            "temperature": 0.4,
+        },
+    )
+    if not response.text:
+        raise RuntimeError("Gemini không trả về nội dung. Hãy thử lại.")
+    return json.loads(response.text)
 
 if "formula" not in st.session_state:
     st.session_state.formula = DEFAULTS.copy()
@@ -106,12 +113,15 @@ if "ai_result" not in st.session_state:
 with st.sidebar:
     st.header("Cài đặt AI")
     api_key = st.text_input(
-        "OpenAI API key",
+        "Google Gemini API key",
         type="password",
-        value=os.getenv("OPENAI_API_KEY", ""),
-        help="Có thể đặt OPENAI_API_KEY trong Secrets của Streamlit thay vì nhập ở đây."
+        value=os.getenv("GOOGLE_API_KEY", ""),
+        help="Có thể đặt GOOGLE_API_KEY trong Secrets của Streamlit thay vì nhập ở đây."
     )
-    model = st.text_input("Model", value=os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
+    model = st.text_input(
+        "Gemini model",
+        value=os.getenv("GOOGLE_MODEL", "gemini-2.5-flash")
+    )
     st.divider()
     batch_ml = st.number_input("Dung tích mẻ (mL)", min_value=1.0, max_value=10000.0, value=10.0, step=1.0)
     st.caption("AI đưa ra gợi ý; công thức chỉ được áp dụng sau khi bạn chủ động chọn.")
@@ -124,11 +134,11 @@ with left:
         placeholder="Ví dụ: Mùi sạch và tươi như vừa tắm, mở đầu có cam nhẹ, không quá ngọt, sau đó ấm và gỗ nhẹ; độ tỏa hương vừa phải.",
         height=150
     )
-    if st.button("Phân tích yêu cầu bằng AI", type="primary", use_container_width=True):
+    if st.button("Phân tích yêu cầu bằng Gemini", type="primary", use_container_width=True):
         if not description.strip():
             st.warning("Hãy mô tả mùi hương bạn muốn trước nhé.")
         elif not api_key.strip():
-            st.error("Chưa có OpenAI API key. Hãy nhập key ở thanh bên hoặc cấu hình OPENAI_API_KEY trong Streamlit Secrets.")
+            st.error("Chưa có Google Gemini API key. Hãy nhập key ở thanh bên hoặc cấu hình GOOGLE_API_KEY trong Streamlit Secrets.")
         else:
             with st.spinner("Đang phân tích sắc thái mùi hương..."):
                 try:
@@ -136,7 +146,7 @@ with left:
                         description, st.session_state.formula, api_key.strip(), model.strip()
                     )
                 except Exception as exc:
-                    st.error(f"Không thể gọi AI: {exc}")
+                    st.error(f"Không thể gọi Gemini API: {exc}")
 
     result = st.session_state.ai_result
     if result:
@@ -201,7 +211,7 @@ st.download_button(
 
 with st.expander("Lưu ý quan trọng"):
     st.write(
-        "AI diễn giải mô tả chủ quan thành gợi ý phối hương, không thể biết chính xác người dùng ngửi thấy gì "
+        "AI diễn giải mô tả chủ quan thành gợi ý phối hương, không thể biết chính xác cảm nhận của người dùng "
         "nếu không có dữ liệu phản hồi thực tế. Nên thu thập đánh giá sau khi thử mùi để cá nhân hóa dần. "
         "Các tỷ lệ trong app là gợi ý công thức, không phải xác nhận an toàn hoặc công thức thương mại đã kiểm nghiệm. "
         "Kiểm tra giới hạn sử dụng của từng nguyên liệu và thử nghiệm quy mô nhỏ trước khi sử dụng."
