@@ -78,9 +78,9 @@ def normalize_percentages(values):
     return cleaned
 
 def get_ai_suggestion(description, current_values, api_key, model):
-    if OpenAI is None:
+    if genai is None:
         raise RuntimeError("Chưa cài thư viện openai. Hãy chạy: pip install -r requirements.txt")
-    client = OpenAI(api_key=api_key)
+    client = genai(api_key=api_key)
     user_payload = {
         "human_scent_request": description,
         "current_formula_percent": current_values,
