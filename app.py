@@ -63,4 +63,4 @@ Chỉ trả JSON hợp lệ, không dùng markdown fences.
 def normalize_percentages(values):
     keys = list(DEFAULTS)
     cleaned = {}
-    for key in keys:
+for key in keys:
