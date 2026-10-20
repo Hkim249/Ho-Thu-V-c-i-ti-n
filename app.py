@@ -13,6 +13,7 @@ except ImportError:
     edge_tts = None
 
 try:
+    # Official modern Gemini SDK; supports Gemini 3.8 Flash.
     from google import genai
     from google.genai import types
 except ImportError:
@@ -176,26 +177,31 @@ def normalize_percentages(values):
     return cleaned
 
 def call_gemini(prompt, api_key, model, audio_bytes=None, audio_mime="audio/wav"):
-    if genai is None:
-        raise RuntimeError("Chưa cài google-genai. Chạy: pip install -r requirements.txt")
+    """Call Gemini 3.8 Flash using the official google-genai SDK."""
+    if genai is None or types is None:
+        raise RuntimeError(
+            "Chưa cài google-genai. Hãy cài các gói trong requirements.txt rồi chạy lại app."
+        )
 
+    # API key is loaded from Streamlit Secrets/environment; it is never requested in the UI.
     client = genai.Client(api_key=api_key)
     contents = [prompt]
     if audio_bytes:
-        audio_part = types.Part.from_bytes(data=audio_bytes, mime_type=audio_mime)
-        contents.append(audio_part)
+        contents.append(types.Part.from_bytes(data=audio_bytes, mime_type=audio_mime))
 
+    # Gemini 3.8 Flash uses the current API settings; deprecated sampling options are omitted.
     response = client.models.generate_content(
         model=model,
         contents=contents,
-        config={
-            "response_mime_type": "application/json",
-            "temperature": 0.4,
-        },
+        config={"response_mime_type": "application/json"},
     )
-    if not response.text:
+    response_text = getattr(response, "text", None)
+    if not response_text:
         raise RuntimeError("Gemini không trả về nội dung. Hãy thử lại.")
-    return json.loads(response.text)
+    try:
+        return json.loads(response_text)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("Gemini trả về dữ liệu không đúng định dạng JSON. Hãy gửi lại yêu cầu.") from exc
 
 def get_ai_suggestion(message, current_values, api_key, model, conversation_history=None, audio_bytes=None, audio_mime="audio/wav"):
     """Return one consultant response and a fresh formula for the current conversation turn."""
@@ -253,10 +259,10 @@ if "chat_error" not in st.session_state:
 
 try:
     secret_api_key = st.secrets.get("GOOGLE_API_KEY", "")
-    secret_model = st.secrets.get("GOOGLE_MODEL", "gemini-2.5-flash")
+    secret_model = st.secrets.get("GOOGLE_MODEL", "gemini-3.8-flash")
 except Exception:
     secret_api_key = ""
-    secret_model = "gemini-2.5-flash"
+    secret_model = "gemini-3.8-flash"
 
 # Welcome screen: play the Vietnamese greeting once, then reveal the original app.
 if "intro_done" not in st.session_state:
@@ -323,11 +329,11 @@ if not st.session_state.intro_done:
 
 # API key is read from Streamlit Secrets (or the environment); it is never requested in the UI.
 api_key = str(secret_api_key or os.getenv("GOOGLE_API_KEY", "")).strip()
-model = str(secret_model or os.getenv("GOOGLE_MODEL", "gemini-2.5-flash")).strip()
+model = str(secret_model or os.getenv("GOOGLE_MODEL", "gemini-3.8-flash")).strip()
 
 with st.sidebar:
     st.header("🍁 Cài đặt AI")
-    st.caption("Gemini API đã được đọc từ Streamlit Secrets.")
+    st.caption("Đang sử dụng Gemini 3.8 Flash. API key được đọc tự động từ Streamlit Secrets.")
     st.divider()
     batch_ml = st.number_input("Dung tích mẻ (mL)", min_value=1.0, max_value=10000.0, value=10.0, step=1.0)
     st.caption("Mỗi phản hồi tư vấn sẽ tự cập nhật công thức ở các thanh trượt bên phải.")
@@ -383,7 +389,7 @@ with left:
         if not api_key.strip():
             st.error("Chưa tìm thấy GOOGLE_API_KEY trong Streamlit Secrets. Hãy kiểm tra cấu hình Secrets của ứng dụng.")
         elif genai is None:
-            st.error("Chưa cài google-genai. Hãy thêm google-genai vào requirements.txt rồi triển khai lại app.")
+            st.error("Chưa cài google-genai. Hãy cài lại các gói trong requirements.txt rồi triển khai app.")
         else:
             # Send prior turns to Gemini as context, excluding any unprocessed turn.
             history_for_model = [
