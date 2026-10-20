@@ -1,5 +1,5 @@
 # Ho-Thu-V-c-i-ti-n
-# Thu Vũ AI — Autumn Fragrance Studio
+## Thu Vũ AI — Autumn Fragrance Studio
 
 ## Run locally
 1. Python 3.10+ recommended.
@@ -17,4 +17,8 @@ GOOGLE_MODEL = "gemini-2.5-flash"
 The app supports typed requests, audio recording analyzed by Gemini, browser-native speech output, autumn-themed styling,
 manual formula editing, AI formula application to sliders, solvent balancing, and CSV export.
 Do not publish the API key.
+
+
+### Vietnamese voice playback
+The app uses `edge-tts` with the `vi-VN-HoaiMyNeural` Vietnamese voice. It needs an internet connection when generating speech. The audio player is configured to autoplay, but some browsers block autoplay until the user interacts with the page.
 
