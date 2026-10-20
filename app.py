@@ -71,15 +71,23 @@ st.markdown(
     .description-heading { color: #ffffff !important; }
     [data-testid="stTextArea"] textarea,
     [data-testid="stTextInput"] input,
-    div[data-baseweb="textarea"] textarea,
-    div[data-baseweb="input"] input {
+    [data-testid="stChatInput"] textarea,
+    [data-testid="stChatInputTextArea"],
+    [data-testid="stChatInput"] input,
+    [data-baseweb="textarea"] textarea,
+    [data-baseweb="input"] input,
+    [data-testid="stChatInput"] div[contenteditable="true"] {
         background: #fff8ee !important;
         color: #000000 !important;
         -webkit-text-fill-color: #000000 !important;
         caret-color: #000000 !important;
         opacity: 1 !important;
     }
-    [data-testid="stTextArea"] textarea::placeholder {
+    [data-testid="stTextArea"] textarea::placeholder,
+    [data-testid="stChatInput"] textarea::placeholder,
+    [data-testid="stChatInputTextArea"]::placeholder,
+    [data-testid="stChatInput"] input::placeholder,
+    [data-testid="stChatInput"] div[contenteditable="true"]:empty::before {
         color: #555555 !important;
         -webkit-text-fill-color: #555555 !important;
         opacity: 1 !important;
@@ -280,7 +288,7 @@ if not st.session_state.intro_done:
         audio_b64 = base64.b64encode(st.session_state.welcome_audio).decode("ascii")
         components.html(
             f"""<!doctype html><html><body style="margin:0;background:transparent;font-family:Arial,sans-serif">
-            <audio id="thu-vu-greeting" controls autoplay playsinline style="width:100%">
+            <audio id="thu-vu-greeting" controls autoplay playsinline preload="auto" style="width:100%">
               <source src="data:audio/mpeg;base64,{audio_b64}" type="audio/mpeg">
             </audio>
             <div id="autoplay-note" style="font-size:12px;color:#fff1df;text-align:center;margin-top:4px;display:none">
@@ -289,10 +297,15 @@ if not st.session_state.intro_done:
             <script>
               const player = document.getElementById('thu-vu-greeting');
               const note = document.getElementById('autoplay-note');
-              const attempt = player.play();
-              if (attempt !== undefined) {{
-                attempt.then(() => {{ note.style.display = 'none'; }}).catch(() => {{ note.style.display = 'block'; }});
-              }}
+              const tryPlayGreeting = () => {{
+                const attempt = player.play();
+                if (attempt !== undefined) {{
+                  attempt.then(() => {{ note.style.display = 'none'; }})
+                    .catch(() => {{ note.style.display = 'block'; }});
+                }}
+              }};
+              player.addEventListener('canplay', tryPlayGreeting, {{ once: true }});
+              tryPlayGreeting();
             </script></body></html>""",
             height=66,
             scrolling=False,
@@ -308,18 +321,13 @@ if not st.session_state.intro_done:
         st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
+# API key is read from Streamlit Secrets (or the environment); it is never requested in the UI.
+api_key = str(secret_api_key or os.getenv("GOOGLE_API_KEY", "")).strip()
+model = str(secret_model or os.getenv("GOOGLE_MODEL", "gemini-2.5-flash")).strip()
+
 with st.sidebar:
     st.header("🍁 Cài đặt AI")
-    api_key = st.text_input(
-        "Google Gemini API key",
-        type="password",
-        value=secret_api_key or os.getenv("GOOGLE_API_KEY", ""),
-        help="Nên lưu GOOGLE_API_KEY trong Streamlit Secrets, không đăng key lên GitHub."
-    )
-    model = st.text_input(
-        "Gemini model",
-        value=secret_model or os.getenv("GOOGLE_MODEL", "gemini-2.5-flash")
-    )
+    st.caption("Gemini API đã được đọc từ Streamlit Secrets.")
     st.divider()
     batch_ml = st.number_input("Dung tích mẻ (mL)", min_value=1.0, max_value=10000.0, value=10.0, step=1.0)
     st.caption("Mỗi phản hồi tư vấn sẽ tự cập nhật công thức ở các thanh trượt bên phải.")
@@ -373,7 +381,7 @@ with left:
 
     if incoming_message is not None:
         if not api_key.strip():
-            st.error("Chưa có Google Gemini API key. Hãy nhập key ở thanh bên hoặc cấu hình GOOGLE_API_KEY trong Streamlit Secrets.")
+            st.error("Chưa tìm thấy GOOGLE_API_KEY trong Streamlit Secrets. Hãy kiểm tra cấu hình Secrets của ứng dụng.")
         elif genai is None:
             st.error("Chưa cài google-genai. Hãy thêm google-genai vào requirements.txt rồi triển khai lại app.")
         else:
