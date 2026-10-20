@@ -4,9 +4,9 @@ import streamlit as st
 import pandas as pd
 
 try:
-    from openai import OpenAI
+    from google import genai
 except ImportError:
-    OpenAI = None
+    genai = None
 
 st.set_page_config(page_title="Thu Vũ AI — Fragrance Studio", page_icon="🌿", layout="wide")
 
