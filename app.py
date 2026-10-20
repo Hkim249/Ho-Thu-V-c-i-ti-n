@@ -1,9 +1,15 @@
 import os
 import json
 import html
+import asyncio
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
+
+try:
+    import edge_tts
+except ImportError:
+    edge_tts = None
 
 try:
     from google import genai
@@ -169,47 +175,34 @@ def get_ai_suggestion(description, current_values, api_key, model, audio_bytes=N
     prompt = SYSTEM_PROMPT + "\n\nDữ liệu người dùng:\n" + json.dumps(payload, ensure_ascii=False)
     return call_gemini(prompt, api_key, model, audio_bytes, audio_mime)
 
-def speak_text(text_to_speak):
-    # Browser-native text-to-speech. Voice availability depends on the user's browser/OS.
-    safe_text = json.dumps(str(text_to_speak), ensure_ascii=False)
-    components.html(
-        f"""
-        <div style="font-family: sans-serif; color: #f6d3a4; padding: 4px 0;">
-          <button id="speakBtn" style="padding:9px 14px;border-radius:9px;border:1px solid #d99b5b;background:#9e512e;color:#fff7ee;cursor:pointer;">
-            🔊 Đọc tư vấn thành tiếng
-          </button>
-          <span id="voiceStatus" style="margin-left:8px;font-size:12px;color:#f3e8dc;"></span>
-        </div>
-        <script>
-          const utteranceText = {safe_text};
-          const btn = document.getElementById("speakBtn");
-          const status = document.getElementById("voiceStatus");
-          btn.onclick = () => {{
-            if (!("speechSynthesis" in window)) {{
-              status.textContent = "Trình duyệt này chưa hỗ trợ đọc thành tiếng.";
-              return;
-            }}
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(utteranceText);
-            utterance.lang = "vi-VN";
-            utterance.rate = 0.95;
-            const voices = window.speechSynthesis.getVoices();
-            const viVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith("vi"));
-            if (viVoice) utterance.voice = viVoice;
-            utterance.onstart = () => status.textContent = "Đang đọc…";
-            utterance.onend = () => status.textContent = "Đã đọc xong.";
-            utterance.onerror = () => status.textContent = "Không thể phát giọng nói trên thiết bị này.";
-            window.speechSynthesis.speak(utterance);
-          }};
-        </script>
-        """,
-        height=58,
+async def _generate_vietnamese_audio(text_to_speak):
+    """Generate Vietnamese neural speech audio with Edge TTS."""
+    communicate = edge_tts.Communicate(
+        str(text_to_speak),
+        voice="vi-VN-HoaiMyNeural",
+        rate="-5%",
     )
+    audio_chunks = []
+    async for chunk in communicate.stream():
+        if chunk.get("type") == "audio":
+            audio_chunks.append(chunk["data"])
+    return b"".join(audio_chunks)
+
+
+def generate_vietnamese_audio(text_to_speak):
+    if edge_tts is None:
+        raise RuntimeError("Chưa cài edge-tts. Chạy: pip install -r requirements.txt")
+    # Streamlit normally runs without an active asyncio loop in this script context.
+    return asyncio.run(_generate_vietnamese_audio(text_to_speak))
 
 if "formula" not in st.session_state:
     st.session_state.formula = DEFAULTS.copy()
 if "ai_result" not in st.session_state:
     st.session_state.ai_result = None
+if "ai_audio" not in st.session_state:
+    st.session_state.ai_audio = None
+if "ai_audio_text" not in st.session_state:
+    st.session_state.ai_audio_text = None
 
 try:
     secret_api_key = st.secrets.get("GOOGLE_API_KEY", "")
@@ -265,10 +258,19 @@ with left:
                         audio_bytes=audio_bytes,
                         audio_mime=audio_mime,
                     )
+                    speech = (
+                        st.session_state.ai_result.get("spoken_response")
+                        or st.session_state.ai_result.get("summary", "")
+                    )
+                    st.session_state.ai_audio_text = speech
+                    st.session_state.ai_audio = None
+                    if speech.strip():
+                        with st.spinner("Đang tạo giọng đọc tiếng Việt…"):
+                            st.session_state.ai_audio = generate_vietnamese_audio(speech)
                 except json.JSONDecodeError:
                     st.error("Gemini trả về dữ liệu không đúng JSON. Hãy thử lại.")
                 except Exception as exc:
-                    st.error(f"Không thể gọi Gemini API: {exc}")
+                    st.error(f"Không thể tạo kết quả/giọng đọc: {exc}")
 
     result = st.session_state.ai_result
     if result:
@@ -282,7 +284,15 @@ with left:
         st.caption("Mức độ đậm dự kiến: " + str(result.get("intensity", "chưa xác định")))
 
         speech = result.get("spoken_response") or result.get("summary", "")
-        speak_text(speech)
+        if st.session_state.ai_audio:
+            st.audio(
+                st.session_state.ai_audio,
+                format="audio/mp3",
+                autoplay=True,
+            )
+            st.caption("Giọng đọc tiếng Việt tự phát khi có kết quả. Nếu trình duyệt chặn tự phát, bấm nút phát trên thanh âm thanh.")
+        else:
+            st.warning("Chưa tạo được giọng đọc tự động. Hãy kiểm tra kết nối mạng và cài đặt edge-tts.")
 
         if st.button("Áp dụng công thức AI đề xuất", use_container_width=True):
             updated = normalize_percentages(result.get("percentages", {}))
@@ -349,8 +359,8 @@ st.download_button(
 
 with st.expander("Lưu ý quan trọng"):
     st.write(
-        "Phần ghi âm dùng khả năng hiểu âm thanh của Gemini; phần đọc tư vấn dùng giọng nói có sẵn trong trình duyệt "
-        "và thiết bị, nên chất lượng/giọng tiếng Việt tùy hệ điều hành. AI chỉ diễn giải cảm nhận chủ quan và đề xuất tỷ lệ, "
+        "Phần ghi âm dùng khả năng hiểu âm thanh của Gemini; phần đọc tư vấn dùng giọng tiếng Việt Hoài My Neural qua Edge TTS "
+        "và cần kết nối mạng. Trình duyệt có thể chặn tự phát âm thanh; khi đó hãy bấm nút phát trên thanh âm thanh. AI chỉ diễn giải cảm nhận chủ quan và đề xuất tỷ lệ, "
         "không xác nhận an toàn hoặc bảo đảm hiệu quả lưu hương. Hãy kiểm tra giới hạn sử dụng của từng nguyên liệu "
         "và thử nghiệm quy mô nhỏ trước khi sử dụng."
     )
