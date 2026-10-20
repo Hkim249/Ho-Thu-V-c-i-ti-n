@@ -1,6 +1,7 @@
 import os
 import json
 import html
+import base64
 import asyncio
 import streamlit as st
 import streamlit.components.v1 as components
@@ -66,10 +67,36 @@ st.markdown(
         font-weight: 600;
     }
     div.stButton > button:hover { border-color: #ffe0b5; color: white; }
-    div[data-baseweb="input"] input, div[data-baseweb="textarea"] textarea {
-        background: rgba(255,248,238,.96);
-        color: #2d211b;
+    /* Chỉ tiêu đề giữ màu trắng; nội dung người dùng nhập luôn màu đen. */
+    .description-heading { color: #ffffff !important; }
+    [data-testid="stTextArea"] textarea,
+    [data-testid="stTextInput"] input,
+    div[data-baseweb="textarea"] textarea,
+    div[data-baseweb="input"] input {
+        background: #fff8ee !important;
+        color: #000000 !important;
+        -webkit-text-fill-color: #000000 !important;
+        caret-color: #000000 !important;
+        opacity: 1 !important;
     }
+    [data-testid="stTextArea"] textarea::placeholder {
+        color: #555555 !important;
+        -webkit-text-fill-color: #555555 !important;
+        opacity: 1 !important;
+    }
+    .welcome-screen {
+        min-height: 72vh; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; text-align: center;
+        padding: 56px 24px; border-radius: 28px; overflow: hidden;
+        background-image: linear-gradient(110deg, rgba(20,15,12,.72), rgba(35,22,15,.38)),
+          url('https://images.unsplash.com/photo-1448375240586-882707db888b?auto=format&fit=crop&w=2200&q=90');
+        background-size: cover; background-position: center;
+        border: 1px solid rgba(255,218,171,.38); box-shadow: 0 18px 55px rgba(0,0,0,.35);
+    }
+    .welcome-kicker { color: #ffd8a8 !important; letter-spacing: .28em; text-transform: uppercase; font-size: .8rem; margin-bottom: 16px; }
+    .welcome-title { color: #fff7ec !important; font-size: clamp(3rem, 8vw, 6rem); line-height: 1.05; font-weight: 700; margin: 0; text-shadow: 0 4px 24px rgba(0,0,0,.5); }
+    .welcome-subtitle { max-width: 650px; margin: 18px auto 28px auto; color: #fff1df !important; font-size: 1.1rem; line-height: 1.7; text-shadow: 0 2px 10px rgba(0,0,0,.55); }
+    .welcome-action div[data-testid="stButton"] > button { min-height: 3.4rem; padding: 0 3rem; border-radius: 999px; font-size: 1.05rem; background: linear-gradient(110deg, #9e512e, #d69a53); border: 1px solid #ffe1b6; box-shadow: 0 8px 26px rgba(0,0,0,.3); }
     </style>
     <div class="autumn-banner">
       <h1>🍂 Thu Vũ AI</h1>
@@ -211,6 +238,64 @@ except Exception:
     secret_api_key = ""
     secret_model = "gemini-2.5-flash"
 
+# Welcome screen: play the Vietnamese greeting once, then reveal the original app.
+if "intro_done" not in st.session_state:
+    st.session_state.intro_done = False
+if "welcome_audio" not in st.session_state:
+    st.session_state.welcome_audio = None
+if "welcome_audio_error" not in st.session_state:
+    st.session_state.welcome_audio_error = None
+
+if not st.session_state.intro_done:
+    greeting = "Chào mừng bạn đã đến với ứng dụng chế tạo nước hoa Thu Vũ."
+    if st.session_state.welcome_audio is None and st.session_state.welcome_audio_error is None:
+        try:
+            st.session_state.welcome_audio = generate_vietnamese_audio(greeting)
+        except Exception as exc:
+            st.session_state.welcome_audio_error = str(exc)
+
+    st.markdown(
+        """<div class="welcome-screen">
+          <div class="welcome-kicker">Autumn Fragrance Studio</div>
+          <h1 class="welcome-title">Thu Vũ</h1>
+          <p class="welcome-subtitle">Chạm vào hương thu, tạo nên mùi hương mang dấu ấn riêng của bạn.</p>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+    if st.session_state.welcome_audio:
+        # Tự thử phát ngay khi màn hình chào mừng được tải. Một số trình duyệt
+        # chặn autoplay có tiếng; khi đó người dùng vẫn có nút phát dự phòng.
+        audio_b64 = base64.b64encode(st.session_state.welcome_audio).decode("ascii")
+        components.html(
+            f"""<!doctype html><html><body style="margin:0;background:transparent;font-family:Arial,sans-serif">
+            <audio id="thu-vu-greeting" controls autoplay playsinline style="width:100%">
+              <source src="data:audio/mpeg;base64,{audio_b64}" type="audio/mpeg">
+            </audio>
+            <div id="autoplay-note" style="font-size:12px;color:#fff1df;text-align:center;margin-top:4px;display:none">
+              Trình duyệt đang chặn tự phát âm thanh. Bấm nút phát trên thanh audio để nghe lời chào.
+            </div>
+            <script>
+              const player = document.getElementById('thu-vu-greeting');
+              const note = document.getElementById('autoplay-note');
+              const attempt = player.play();
+              if (attempt !== undefined) {{
+                attempt.then(() => {{ note.style.display = 'none'; }}).catch(() => {{ note.style.display = 'block'; }});
+              }}
+            </script></body></html>""",
+            height=66,
+            scrolling=False,
+        )
+    else:
+        st.caption("Không tạo được lời chào tự động. Kiểm tra kết nối Internet và tải lại trang.")
+    spacer_left, start_col, spacer_right = st.columns([1, 1, 1])
+    with start_col:
+        st.markdown('<div class="welcome-action">', unsafe_allow_html=True)
+        if st.button("Bắt đầu", type="primary", use_container_width=True):
+            st.session_state.intro_done = True
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+    st.stop()
+
 with st.sidebar:
     st.header("🍁 Cài đặt AI")
     api_key = st.text_input(
@@ -230,7 +315,7 @@ with st.sidebar:
 left, right = st.columns([1.05, 0.95], gap="large")
 
 with left:
-    st.subheader("1. Mô tả mùi hương")
+    st.markdown('<h3 class="description-heading">1. Mô tả mùi hương</h3>', unsafe_allow_html=True)
     description = st.text_area(
         "Mùi hương m muốn tạo",
         placeholder="Ví dụ: Mùi sạch và tươi như vừa tắm, cam nhẹ lúc đầu, không quá ngọt, sau đó ấm và gỗ nhẹ.",
