@@ -131,10 +131,10 @@ _bg_path = Path(__file__).resolve().parent / "thu_vu_welcome_background.jpg"
 if _bg_path.is_file():
     _bg_bytes = _bg_path.read_bytes()
     _bg_uri = "data:image/jpeg;base64," + base64.b64encode(_bg_bytes).decode("ascii")
+    _bg_css = f'url("{_bg_uri}")'
 else:
-    _bg_uri = "linear-gradient(135deg, #6e4528, #29251d)"
-    style_html = style_html.replace("url('__WELCOME_BACKGROUND__')", "__WELCOME_BACKGROUND__")
-st.markdown(style_html.replace("__WELCOME_BACKGROUND__", _bg_uri), unsafe_allow_html=True)
+    _bg_css = "linear-gradient(135deg, #6e4528, #29251d)"
+st.markdown(style_html.replace("url('__WELCOME_BACKGROUND__')", _bg_css), unsafe_allow_html=True)
 
 DEFAULTS = {
     "Cam": 1.38,
