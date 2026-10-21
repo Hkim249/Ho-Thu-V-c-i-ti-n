@@ -15,6 +15,9 @@ try:
 except ImportError:
     edge_tts = None
 
+# Fallback model used only when the configured primary model returns HTTP 503.
+GEMINI_FALLBACK_MODEL = "gemini-3.5-flash"
+
 try:
     # Official Google GenAI SDK.
     from google import genai
@@ -305,6 +308,20 @@ def call_gemini(prompt, api_key, model, audio_bytes=None, audio_mime="audio/wav"
                 token in low for token in ("temporarily unavailable", "connection reset", "timed out", "timeout", "overloaded")
             )
             if not transient or attempt >= max_attempts - 1:
+                # Fallback only when the primary model is temporarily overloaded (503).
+                # Avoid recursive fallback by checking the model ID.
+                if status == 503 and model != "gemini-3.5-flash":
+                    logging.warning(
+                        "Primary Gemini model %s returned 503 after retries; trying fallback gemini-3.5-flash.",
+                        model,
+                    )
+                    return call_gemini(
+                        prompt,
+                        api_key,
+                        GEMINI_FALLBACK_MODEL,
+                        audio_bytes=audio_bytes,
+                        audio_mime=audio_mime,
+                    )
                 if isinstance(exc, RuntimeError) and str(exc).startswith(("Gemini không trả", "Phản hồi AI", "AI trả")):
                     raise
                 raise RuntimeError(_friendly_gemini_error(exc)) from exc
