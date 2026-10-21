@@ -1,4 +1,4 @@
-streamlit>=1.39.0
+streamlit>=1.40.0
 pandas>=2.0.0
 google-genai>=1.0.0
 edge-tts>=6.1.0
