@@ -336,24 +336,22 @@ if not st.session_state.intro_done:
         unsafe_allow_html=True,
     )
     if st.session_state.welcome_audio:
-        # Hidden audio player: attempt automatic Vietnamese speech without showing text or controls.
+        # Audio-only greeting: no visible player, controls, or fallback text.
+        # Autoplay with sound is attempted, but browser policies may block it until a user gesture.
         audio_b64 = base64.b64encode(st.session_state.welcome_audio).decode("ascii")
         components.html(
-            f"""<!doctype html><html><body style="margin:0;background:transparent;font-family:Arial,sans-serif">
-            <audio id="thu-vu-greeting" controls autoplay playsinline preload="auto" style="width:100%;height:38px">
+            f"""<!doctype html><html><body style="margin:0;background:transparent">
+            <audio id="thu-vu-greeting" autoplay playsinline preload="auto" style="display:none">
               <source src="data:audio/mpeg;base64,{audio_b64}" type="audio/mpeg">
             </audio>
-            <div id="thu-vu-audio-note" style="display:none;color:#fff1df;font-size:12px;text-align:center;margin-top:5px">
-              Thiết bị đang chặn tự phát âm thanh. Chạm nút phát để nghe lời chào nhé.
-            </div>
             <script>
               const player = document.getElementById('thu-vu-greeting');
-              const note = document.getElementById('thu-vu-audio-note');
-              const attempt = player.play();
-              if (attempt !== undefined) attempt.catch(() => {{ note.style.display = 'block'; }});
-              player.addEventListener('play', () => {{ note.style.display = 'none'; }});
+              if (player) {{
+                const attempt = player.play();
+                if (attempt && typeof attempt.catch === 'function') attempt.catch(() => {{}});
+              }}
             </script></body></html>""",
-            height=58,
+            height=0,
             scrolling=False,
         )
     spacer_left, start_col, spacer_right = st.columns([1, 1, 1])
