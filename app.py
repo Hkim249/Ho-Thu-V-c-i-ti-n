@@ -55,10 +55,6 @@ st.markdown(
     .header-ornament {{ color:#e7a64f; letter-spacing:.2em; font-size:1.1rem; }}
     .panel {{ background:linear-gradient(145deg,rgba(82,57,40,.83),rgba(49,34,25,.91)); border:1px solid rgba(240,187,125,.23); border-radius:17px; padding:16px; box-shadow:0 10px 26px rgba(0,0,0,.18); margin-bottom:12px; }}
     .panel-title {{ font-size:1.05rem; font-weight:650; color:#ffedcf; margin:0 0 12px 0; }}
-    .nav-stack {{ padding-top:10px; }}
-    .nav-item {{ border-radius:12px; padding:12px 10px; margin:5px 0; color:#f3dfc5; font-size:.92rem; border:1px solid transparent; }}
-    .nav-item.active {{ background:linear-gradient(100deg,rgba(184,105,39,.86),rgba(113,65,31,.7)); border-color:rgba(255,200,122,.4); color:#fff4df; }}
-    .nav-note {{ color:#cdb398; font-size:.78rem; padding:10px 8px; line-height:1.5; }}
     div[data-testid="stButton"] > button {{ border-radius:11px; border:1px solid rgba(243,180,99,.56); background:linear-gradient(110deg,#8e4a24,#b96d32); color:#fff3df; font-weight:600; min-height:2.5rem; }}
     div[data-testid="stButton"] > button:hover {{ border-color:#ffe2b4; color:white; background:linear-gradient(110deg,#a85a2b,#d28a43); }}
     div[data-testid="stButton"] > button[kind="secondary"] {{ background:rgba(104,72,49,.65); border-color:rgba(231,183,129,.3); }}
@@ -84,6 +80,7 @@ st.markdown(
     .safety-note {{ background:#f2d0a3; color:#543017; padding:13px 14px; border-radius:12px; font-size:.87rem; }}
     .safety-note span {{ color:#543017; }}
     @media (max-width: 1050px) {{ .block-container {{ padding: .6rem .6rem 1.5rem; }} .app-header {{ padding:15px 8px; }} }}
+    @media (max-width: 850px) {{ [data-testid="stHorizontalBlock"] {{ flex-wrap: wrap; }} [data-testid="stHorizontalBlock"] > [data-testid="column"] {{ min-width: 100% !important; }} }}
     </style>
     """,
     unsafe_allow_html=True,
@@ -325,12 +322,14 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+MAIN_GREETING = (
+    "Chào bạn! Mình là chuyên viên tư vấn mùi hương của Thu Vũ. "
+    "Bạn muốn tạo mùi hương như thế nào? Có thể kể về cảm giác, nguyên liệu yêu thích "
+    "hoặc hoàn cảnh sử dụng nhé."
+)
+
 if st.session_state.main_greeting_pending:
-    main_greeting = (
-        "Chào bạn! Mình là chuyên viên tư vấn mùi hương của Thu Vũ. "
-        "Bạn muốn tạo mùi hương như thế nào? Có thể kể về cảm giác, nguyên liệu yêu thích "
-        "hoặc hoàn cảnh sử dụng nhé."
-    )
+    main_greeting = MAIN_GREETING
     if st.session_state.main_greeting_audio is None and st.session_state.main_greeting_error is None:
         try:
             with st.spinner("Đang chuẩn bị lời chào…"):
@@ -345,10 +344,8 @@ if st.session_state.main_greeting_pending:
         )
     st.session_state.main_greeting_pending = False
 
-# Main grid: icon toolbar/navigation, formula controls, AI consultant.
-nav_col, center_col, chat_col = st.columns([0.62, 1.23, 1.16], gap="small")
-with nav_col:
-    st.markdown('<div class="panel nav-stack"><div class="panel-title">🍂 Điều hướng</div><div class="nav-item active">🌿　Phối hương</div><div class="nav-item">▢　AI tư vấn</div><div class="nav-item">⚗　Công thức</div><div class="nav-item">▱　Lưu & Tải</div><div class="nav-item">♧　Hướng dẫn</div><div class="nav-note">Tùy chỉnh hương thơm theo cảm nhận riêng của bạn.</div></div>', unsafe_allow_html=True)
+# Main layout: remove the entire left navigation toolbar; keep formula and AI side by side.
+center_col, chat_col = st.columns([1.08, 1.0], gap="medium")
 
 # Placeholders let the chat be processed before the sliders are created, so AI changes apply immediately.
 with center_col:
@@ -362,7 +359,11 @@ with chat_col:
             if AVATAR_PATH.exists():
                 st.image(str(AVATAR_PATH), use_container_width=True)
         with greeting_col:
-            st.markdown('<div style="background:#f0d6b6;color:#3c2618;border-radius:15px;padding:13px;font-size:.9rem;line-height:1.55">Xin chào!<br/>Tớ là Thu Vũ AI 🍃<br/>Hãy kể cho tớ mùi hương bạn thích, tớ sẽ gợi ý công thức phù hợp nhé!</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div style="background:#f0d6b6;color:#3c2618;border-radius:15px;padding:13px;font-size:.9rem;line-height:1.55">'
+                + html.escape(MAIN_GREETING) + '</div>',
+                unsafe_allow_html=True,
+            )
 
         # Persistent conversation history.
         if st.session_state.chat_history:
