@@ -99,7 +99,7 @@ st.markdown(
     }
     /* Thu Vũ dashboard: warm autumn glass panels inspired by the reference mockup. */
     .main-title { text-align:center; margin: 0.1rem 0 .2rem; color:#ffe7c5 !important; font-family: Georgia, serif; font-size: clamp(2rem, 4vw, 3.4rem); letter-spacing:.02em; }
-    .main-slogan { text-align:center; color:#f5d6ad !important; margin: 0 0 1.15rem; font-size:1rem; }
+    .main-slogan { text-align:center; color:#f5d6ad !important; margin: 0 0 1.15rem; font-size:1rem; font-weight:400; }
     .panel { background:linear-gradient(145deg,rgba(92,63,43,.70),rgba(48,34,26,.86)); border:1px solid rgba(236,180,111,.28); border-radius:17px; padding:15px 16px; box-shadow:0 10px 26px rgba(0,0,0,.15); margin-bottom:12px; }
     .panel-title { color:#ffe2b5 !important; font-size:1.08rem; font-weight:700; margin:0 0 .6rem; }
     .nav-item { border-radius:12px; padding:11px 10px; margin:5px 0; color:#f5e6d2; background:rgba(255,255,255,.035); border:1px solid rgba(255,215,170,.08); font-size:.92rem; }
@@ -348,7 +348,6 @@ if not st.session_state.intro_done:
         """<div class="welcome-screen">
           <h1 class="welcome-title">Thu Vũ</h1>
           <p class="welcome-slogan">Hương thu theo cách riêng của bạn</p>
-          <div class="welcome-ornament">✧ ───── ❧ ───── ✧</div>
         </div>""",
         unsafe_allow_html=True,
     )
@@ -389,7 +388,7 @@ model = str(secret_model or os.getenv("GOOGLE_MODEL", "gemini-3.1-flash-lite")).
 
 # Main dashboard header. The app still requires the welcome screen before this view.
 batch_ml = 10.0
-st.markdown('<h1 class="main-title">Thu Vũ</h1><p class="main-slogan">✧ 🍂 Hương thu theo cách riêng của bạn 🍂 ✧</p>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-title">Thu Vũ</h1><p class="main-slogan">Hương thu theo cách riêng của bạn</p>', unsafe_allow_html=True)
 
 # When the main screen first opens, automatically try to read the existing consultant greeting.
 # Browsers may block autoplay with sound; the audio controls remain available as a fallback.
