@@ -1,40 +1,27 @@
 # Ho-Thu-V-c-i-ti-n
-## Thu Vũ AI — Ollama Local
+# Thu Vũ AI — Gemini 2.5 Flash
 
-Bản này thay Gemini API bằng **Ollama**, một API chạy model AI trên máy chủ/máy tính do bạn kiểm soát.
-
-## Điểm chính
-- Không cần API key của nhà cung cấp AI.
-- Không có hạn mức lượt gọi do nhà cung cấp API cloud áp đặt; tốc độ và số lượt thực tế vẫn phụ thuộc phần cứng, RAM, CPU/GPU và thời gian hoạt động.
-- Hiểu mô tả tự nhiên bằng tiếng Việt, duy trì ngữ cảnh trò chuyện và đề xuất công thức JSON.
-- Tin nhắn thoại được chuyển thành văn bản bằng `faster-whisper` chạy cục bộ.
-- Công thức được cập nhật tự động trên thanh trượt sau mỗi phản hồi.
-
-## Cài đặt
-1. Cài Ollama: https://ollama.com/download
-2. Tải model trong Terminal/Command Prompt:
-   ```bash
-   ollama pull qwen2.5:7b
-   ```
-   Máy yếu hơn có thể thử `ollama pull qwen2.5:3b`.
-3. Trong thư mục app:
+## Cài đặt và chạy
+1. Cài Python 3.10 trở lên.
+2. Cài thư viện:
    ```bash
    pip install -r requirements.txt
+   ```
+3. Khai báo API key trong Streamlit Secrets (`.streamlit/secrets.toml` khi chạy local hoặc mục Secrets trên nền tảng triển khai):
+   ```toml
+   GOOGLE_API_KEY = "YOUR_GOOGLE_API_KEY"
+   ```
+   Ứng dụng mặc định dùng model `gemini-2.5-flash`. Có thể đặt rõ model trong Secrets bằng `GOOGLE_MODEL = "gemini-2.5-flash"`. Không nhập hoặc công khai API key trên giao diện hay trong mã nguồn.
+4. Chạy ứng dụng:
+   ```bash
    streamlit run app.py
    ```
 
-## Cấu hình
-Mặc định `OLLAMA_BASE_URL=http://localhost:11434` và `OLLAMA_MODEL=qwen2.5:7b`.
+## Tính năng
+- Dùng model `gemini-2.5-flash` qua SDK `google-genai`.
+- Giữ giao diện, tư vấn công thức hương, điều chỉnh thanh thành phần, và tính năng giọng nói của bản trước.
+- API key được đọc từ Streamlit Secrets hoặc biến môi trường `GOOGLE_API_KEY`.
 
-Có thể đặt trong `.streamlit/secrets.toml`:
-```toml
-OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_MODEL = "qwen2.5:7b"
-```
-
-## Lưu ý triển khai
-Nếu deploy lên Streamlit Community Cloud, `localhost` là máy chủ Streamlit chứ không phải máy tính cá nhân. Khi đó phải chạy Ollama trên một máy chủ khác có thể truy cập an toàn và đặt `OLLAMA_BASE_URL` đến máy đó. Không nên mở Ollama công khai không có bảo vệ mạng.
-
-## Giới hạn
-Không có dịch vụ AI cloud nào bảo đảm miễn phí và không giới hạn tuyệt đối. Ollama tránh hạn mức lượt gọi từ nhà cung cấp vì model chạy trên hạ tầng bạn kiểm soát, nhưng vẫn chịu giới hạn tài nguyên phần cứng. `faster-whisper` sẽ tải model nhận diện giọng nói ở lần đầu và có thể cần khá nhiều RAM/CPU.
+## Lưu ý hạn mức
+Hạn mức miễn phí và số yêu cầu mỗi ngày phụ thuộc model, dự án và trạng thái tài khoản. Xem giới hạn thực tế trong Google AI Studio trước khi triển khai rộng. Đổi model không tự động bảo đảm một số lượt/ngày cụ thể.
 
