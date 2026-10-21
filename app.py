@@ -5,6 +5,7 @@ import base64
 import asyncio
 import time
 import random
+import logging
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
@@ -574,8 +575,20 @@ with chat_col:
                 except json.JSONDecodeError:
                     st.error("Gemini trả về dữ liệu không đúng JSON. Hãy gửi lại tin nhắn nhé.")
                 except Exception as exc:
-                    # Keep the user's current formula and show a short actionable error.
+                    # Preserve the current formula, log the full exception server-side,
+                    # and expose a safe diagnostic expander when Cloud Logs are blank.
+                    logging.exception("Thu Vu chat request failed")
                     st.error(f"Không thể xử lý cuộc trò chuyện: {exc}")
+                    with st.expander("Xem chi tiết lỗi để chẩn đoán", expanded=True):
+                        st.caption("Gửi phần chi tiết này cho người hỗ trợ. Không chụp hoặc gửi API key trong Secrets.")
+                        details = []
+                        seen = set()
+                        current = exc
+                        while current is not None and id(current) not in seen and len(details) < 5:
+                            seen.add(id(current))
+                            details.append(f"{type(current).__name__}: {str(current)[:1200]}")
+                            current = getattr(current, "__cause__", None) or getattr(current, "__context__", None)
+                        st.code("\n\nNguyên nhân / exception chain:\n".join(details) or repr(exc))
 
         if st.session_state.chat_error:
             st.warning(st.session_state.chat_error)
