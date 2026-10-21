@@ -1,13 +1,10 @@
-# Thu Vũ AI — Autumn Fragrance Studio
+# Thu Vũ
 
-Bản cập nhật giao diện chào mừng và tốc độ giọng đọc.
+Bản tối ưu dung lượng mã nguồn, dùng Gemini 3.1 Flash-Lite qua Google GenAI SDK.
 
-- Tăng tốc Edge TTS lên 1.5x (`rate=+50%`), giọng nữ tiếng Việt `vi-VN-HoaiMyNeural`.
-- Dùng ảnh thiết kế thứ 3 trong ảnh tham khảo làm nền chào mừng.
-- Thêm hiệu ứng hiện dần, ánh sáng lướt nhẹ và chuyển động rất nhẹ cho tiêu đề/nút; hỗ trợ `prefers-reduced-motion`.
-- Giữ nguyên bìa chào mừng, tiêu đề Thu Vũ và các chức năng app hiện có.
+- Tên app: **Thu Vũ**
+- Slogan: **Hương thu theo cách riêng của bạn**
+- Background chào mừng đã nén thành JPEG và được nạp từ file cạnh `app.py`.
+- Tốc độ giọng đọc Edge TTS: 1.25x (`rate=+25%`), giọng `vi-VN-HoaiMyNeural`.
 
-Cài thư viện bằng `pip install -r requirements.txt`, sau đó chạy `streamlit run app.py`. Cần cấu hình `GOOGLE_API_KEY` trong Streamlit Secrets; model mặc định là `gemini-3.1-flash-lite`.
-
-Lưu ý: trình duyệt vẫn có thể chặn tự phát âm thanh cho đến khi người dùng tương tác.
-
+Cài đặt: `pip install -r requirements.txt`. Cấu hình `GOOGLE_API_KEY` và `GOOGLE_MODEL = "gemini-3.1-flash-lite"` trong Streamlit Secrets. Đặt `app.py`, `requirements.txt` và `thu_vu_welcome_background.jpg` cùng thư mục khi triển khai.
