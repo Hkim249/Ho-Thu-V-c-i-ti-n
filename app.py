@@ -24,9 +24,10 @@ except ImportError:
     types = None
 
 st.set_page_config(
-    page_title="Thu Vũ AI — Autumn Fragrance Studio",
+    page_title="Thu Vũ",
     page_icon="🍂",
     layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
 # Autumn-inspired interface. All CSS is decorative; app functionality remains native Streamlit.
@@ -96,6 +97,23 @@ st.markdown(
         -webkit-text-fill-color: #555555 !important;
         opacity: 1 !important;
     }
+    /* Thu Vũ dashboard: warm autumn glass panels inspired by the reference mockup. */
+    .main-title { text-align:center; margin: 0.1rem 0 .2rem; color:#ffe7c5 !important; font-family: Georgia, serif; font-size: clamp(2rem, 4vw, 3.4rem); letter-spacing:.02em; }
+    .main-slogan { text-align:center; color:#f5d6ad !important; margin: 0 0 1.15rem; font-size:1rem; }
+    .panel { background:linear-gradient(145deg,rgba(92,63,43,.70),rgba(48,34,26,.86)); border:1px solid rgba(236,180,111,.28); border-radius:17px; padding:15px 16px; box-shadow:0 10px 26px rgba(0,0,0,.15); margin-bottom:12px; }
+    .panel-title { color:#ffe2b5 !important; font-size:1.08rem; font-weight:700; margin:0 0 .6rem; }
+    .nav-item { border-radius:12px; padding:11px 10px; margin:5px 0; color:#f5e6d2; background:rgba(255,255,255,.035); border:1px solid rgba(255,215,170,.08); font-size:.92rem; }
+    .nav-item.active { background:linear-gradient(110deg,rgba(166,92,43,.85),rgba(115,65,34,.8)); border-color:rgba(255,200,123,.55); }
+    .chat-bubble { background:#f0d6b6; color:#38271c !important; border-radius:15px; padding:12px 14px; margin:8px 0; }
+    .chat-bubble p { color:#38271c !important; }
+    .avatar-img { width:82px; height:110px; object-fit:cover; object-position:50% 25%; border-radius:42px 42px 18px 18px; border:2px solid rgba(255,210,151,.7); }
+    .description-panel { background:#f0d6b6; color:#493222; border-radius:14px; padding:18px; min-height:145px; }
+    .description-panel p { color:#493222 !important; }
+    [data-testid="stVerticalBlockBorderWrapper"] { border-color:rgba(236,180,111,.25) !important; background:rgba(75,49,33,.34); border-radius:16px; }
+    [data-testid="stDataFrame"] { border-radius:10px; overflow:hidden; }
+    div[data-testid="stSlider"] [data-baseweb="slider"] { padding-top:.2rem; }
+    [data-testid="stAudioInput"] { background:rgba(242,218,188,.09); border-radius:12px; padding:6px; }
+    @media (max-width: 900px) { .panel { padding:12px; } .nav-item { font-size:.8rem; padding:8px 6px; } }
     .welcome-screen {
         position: relative; isolation: isolate;
         min-height: 72vh; display: flex; flex-direction: column;
@@ -113,6 +131,8 @@ st.markdown(
         transform: translateX(-65%) rotate(8deg); animation: autumnShimmer 9s ease-in-out infinite;
     }
     .welcome-kicker { color: #ffd8a8 !important; letter-spacing: .28em; text-transform: uppercase; font-size: .8rem; margin-bottom: 16px; animation: titleFloat 4.5s ease-in-out infinite; }
+    .welcome-slogan { color:#ffe1b6 !important; font-size:clamp(1rem,2.2vw,1.5rem); margin:18px 0 0; text-shadow:0 2px 12px rgba(0,0,0,.5); }
+    .welcome-ornament { color:#eeb76f; font-size:1.2rem; margin-top:12px; }
     .welcome-title { color: #fff7ec !important; font-size: clamp(3rem, 8vw, 6rem); line-height: 1.05; font-weight: 700; margin: 0; text-shadow: 0 4px 24px rgba(0,0,0,.5); animation: titleFloat 4.5s ease-in-out infinite; }
     .welcome-action div[data-testid="stButton"] > button { min-height: 3.4rem; padding: 0 3rem; border-radius: 999px; font-size: 1.05rem; background: linear-gradient(110deg, #9e512e, #d69a53); border: 1px solid #ffe1b6; box-shadow: 0 8px 26px rgba(0,0,0,.3); transition: transform .25s ease, box-shadow .25s ease; }
     .welcome-action div[data-testid="stButton"] > button:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(214,154,83,.35); }
@@ -121,10 +141,6 @@ st.markdown(
     @keyframes titleFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
     @media (prefers-reduced-motion: reduce) { .welcome-screen, .welcome-screen::before, .welcome-kicker, .welcome-title { animation: none !important; } }
     </style>
-    <div class="autumn-banner">
-      <h1>🍂 Thu Vũ AI</h1>
-      <p>Autumn Fragrance Studio · Mô tả cảm nhận, nghe tư vấn và tinh chỉnh công thức cùng Gemini.</p>
-    </div>
     """,
     unsafe_allow_html=True,
 )
@@ -330,8 +346,9 @@ if not st.session_state.intro_done:
     # Keep the original cover image and title, but do not display the greeting text or audio controls.
     st.markdown(
         """<div class="welcome-screen">
-          <div class="welcome-kicker">Autumn Fragrance Studio</div>
           <h1 class="welcome-title">Thu Vũ</h1>
+          <p class="welcome-slogan">Hương thu theo cách riêng của bạn</p>
+          <div class="welcome-ornament">✧ ───── ❧ ───── ✧</div>
         </div>""",
         unsafe_allow_html=True,
     )
@@ -370,11 +387,9 @@ if not st.session_state.intro_done:
 api_key = str(secret_api_key or os.getenv("GOOGLE_API_KEY", "")).strip()
 model = str(secret_model or os.getenv("GOOGLE_MODEL", "gemini-3.1-flash-lite")).strip()
 
-with st.sidebar:
-    st.header("🍁 Cài đặt AI")
-    st.divider()
-    batch_ml = st.number_input("Dung tích mẻ (mL)", min_value=1.0, max_value=10000.0, value=10.0, step=1.0)
-    st.caption("Mỗi phản hồi tư vấn sẽ tự cập nhật công thức ở các thanh trượt bên phải.")
+# Main dashboard header. The app still requires the welcome screen before this view.
+batch_ml = 10.0
+st.markdown('<h1 class="main-title">Thu Vũ</h1><p class="main-slogan">✧ 🍂 Hương thu theo cách riêng của bạn 🍂 ✧</p>', unsafe_allow_html=True)
 
 # When the main screen first opens, automatically try to read the existing consultant greeting.
 # Browsers may block autoplay with sound; the audio controls remain available as a fallback.
@@ -413,42 +428,51 @@ if st.session_state.main_greeting_pending:
         st.caption("Chưa phát được lời chào tự động. Bạn vẫn có thể bắt đầu trò chuyện; hãy kiểm tra kết nối mạng nếu muốn nghe giọng đọc.")
     st.session_state.main_greeting_pending = False
 
-# Keep all user input handling before slider widgets are instantiated so their values
-# can be updated safely in the same Streamlit rerun.
-left, right = st.columns([1.05, 0.95], gap="large")
+# Keep the conversation/audio workflow before slider widgets are instantiated so AI updates apply immediately.
+nav_col, formula_col, chat_col = st.columns([0.62, 1.42, 1.28], gap="small")
 
-with left:
-    st.markdown('<h3 class="description-heading">1. Trò chuyện với chuyên viên Thu Vũ</h3>', unsafe_allow_html=True)
-    st.caption("Nhắn bằng văn bản hoặc ghi âm. Bạn có thể trao đổi nhiều lượt để tinh chỉnh mùi hương.")
+with nav_col:
+    st.markdown('<div class="panel-title">🍂 Điều hướng</div>', unsafe_allow_html=True)
+    st.markdown('<div class="nav-item active">🍃 Phối hương</div>', unsafe_allow_html=True)
+    st.markdown('<div class="nav-item">▢ AI tư vấn</div>', unsafe_allow_html=True)
+    st.markdown('<div class="nav-item">⚗ Công thức</div>', unsafe_allow_html=True)
+    st.markdown('<div class="nav-item">▱ Lưu & Tải</div>', unsafe_allow_html=True)
+    st.markdown('<div class="nav-item">♧ Hướng dẫn</div>', unsafe_allow_html=True)
 
-    # Show the persistent conversation.
+# Render and process the chatbot first in code, while it remains in the right-hand visual column.
+with chat_col:
+    st.markdown('<div class="panel-title">🍂 AI tư vấn hương thơm</div>', unsafe_allow_html=True)
+    avatar_path = Path(__file__).with_name("thu_vu_avatar.png")
+    if avatar_path.exists():
+        avatar_col, greeting_col = st.columns([0.8, 1.2], gap="small")
+        with avatar_col:
+            st.image(str(avatar_path), use_container_width=True)
+        with greeting_col:
+            st.markdown('<div class="chat-bubble"><p><b>Xin chào!</b><br>Tớ là Thu Vũ AI 🍃<br>Hãy kể cho tớ mùi hương bạn thích, tớ sẽ gợi ý công thức phù hợp nhé!</p></div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="chat-bubble"><p><b>Xin chào!</b><br>Tớ là Thu Vũ AI 🍃<br>Hãy kể cho tớ mùi hương bạn thích, tớ sẽ gợi ý công thức phù hợp nhé!</p></div>', unsafe_allow_html=True)
+
     if not st.session_state.chat_history:
-        with st.chat_message("assistant"):
-            st.write("Chào bạn! Mình là chuyên viên tư vấn mùi hương của Thu Vũ. Bạn muốn tạo mùi hương như thế nào? Có thể kể về cảm giác, nguyên liệu yêu thích hoặc hoàn cảnh sử dụng nhé.")
+        pass
     else:
         for message_item in st.session_state.chat_history:
             with st.chat_message(message_item["role"]):
                 st.write(message_item["content"])
 
-    # Text chat: submission is processed immediately, with no separate Apply button.
-    text_message = st.chat_input("Ví dụ: Mình muốn mùi sạch, tươi, hơi gỗ và không quá ngọt…")
-
-    # Voice chat: record, then explicitly send the recording. Digest prevents duplicate turns
-    # when Streamlit reruns because another widget changed.
-    voice_col, send_col = st.columns([3, 1])
-    with voice_col:
-        voice_value = st.audio_input("Hoặc ghi âm tin nhắn", help="Nói tự nhiên như đang trao đổi với chuyên viên.")
+    text_message = st.chat_input("Nhập mô tả mùi hương của bạn…")
+    voice_value = st.audio_input("Hoặc ghi âm tin nhắn", help="Nói tự nhiên như đang trao đổi với chuyên viên.")
     voice_bytes = voice_value.getvalue() if voice_value is not None else None
     voice_mime = getattr(voice_value, "type", None) or "audio/wav"
-    with send_col:
-        st.write("")
-        send_voice = st.button("Gửi giọng nói", use_container_width=True, type="secondary")
+    send_voice = st.button("🎙 Gửi giọng nói", use_container_width=True, type="secondary")
 
     incoming_message = None
     incoming_audio = None
     incoming_mime = "audio/wav"
     incoming_digest = None
-    if text_message and text_message.strip():
+    if st.session_state.get("quick_prompt"):
+        incoming_message = str(st.session_state.quick_prompt).strip()
+        st.session_state.quick_prompt = None
+    elif text_message and text_message.strip():
         incoming_message = text_message.strip()
     elif send_voice and voice_bytes:
         import hashlib
@@ -466,48 +490,23 @@ with left:
         elif genai is None:
             st.error("Chưa cài google-genai. Hãy cài lại các gói trong requirements.txt rồi triển khai app.")
         else:
-            # Send prior turns to Gemini as context, excluding any unprocessed turn.
-            history_for_model = [
-                {"role": item["role"], "content": item["content"]}
-                for item in st.session_state.chat_history[-12:]
-            ]
+            history_for_model = [{"role": item["role"], "content": item["content"]} for item in st.session_state.chat_history[-12:]]
             try:
                 with st.spinner("Chuyên viên Thu Vũ đang lắng nghe và tư vấn…"):
-                    result = get_ai_suggestion(
-                        incoming_message,
-                        st.session_state.formula,
-                        api_key.strip(),
-                        model.strip(),
-                        conversation_history=history_for_model,
-                        audio_bytes=incoming_audio,
-                        audio_mime=incoming_mime,
-                    )
-
-                # Normalize and immediately set slider state before those widgets are created below.
+                    result = get_ai_suggestion(incoming_message, st.session_state.formula, api_key.strip(), model.strip(), conversation_history=history_for_model, audio_bytes=incoming_audio, audio_mime=incoming_mime)
                 updated = normalize_percentages(result.get("percentages", {}))
                 st.session_state.formula = updated.copy()
                 for ingredient, value in updated.items():
                     st.session_state[f"slider_{ingredient}"] = float(value)
-
-                assistant_reply = str(
-                    result.get("spoken_response")
-                    or result.get("summary")
-                    or "Mình đã cập nhật công thức theo yêu cầu của bạn."
-                ).strip()
-                # Keep only the first paragraph of the AI response; omit the extra
-                # follow-up/explanation paragraph because the user does not need it.
+                assistant_reply = str(result.get("spoken_response") or result.get("summary") or "Mình đã cập nhật công thức theo yêu cầu của bạn.").strip()
                 paragraphs = [part.strip() for part in assistant_reply.split("\n\n") if part.strip()]
                 assistant_reply = paragraphs[0] if paragraphs else "Mình đã cập nhật công thức theo yêu cầu của bạn."
-
+                user_display = "🎙️ Tin nhắn thoại đã gửi (Gemini đã phân tích âm thanh)." if incoming_audio is not None else incoming_message
                 if incoming_audio is not None:
-                    user_display = "🎙️ Tin nhắn thoại đã gửi (Gemini đã phân tích âm thanh)."
                     st.session_state.last_audio_digest = incoming_digest
-                else:
-                    user_display = incoming_message
                 st.session_state.chat_history.append({"role": "user", "content": user_display})
                 st.session_state.chat_history.append({"role": "assistant", "content": assistant_reply})
                 st.session_state.ai_result = result
-                # Read only the first paragraph retained for the assistant response.
                 st.session_state.ai_audio_text = assistant_reply.strip()
                 st.session_state.ai_audio = None
                 st.session_state.ai_audio_pending = False
@@ -528,33 +527,29 @@ with left:
     if st.session_state.chat_error:
         st.warning(st.session_state.chat_error)
         st.session_state.chat_error = None
-
     if st.session_state.ai_audio:
-        st.audio(
-            st.session_state.ai_audio,
-            format="audio/mp3",
-            autoplay=st.session_state.ai_audio_pending,
-        )
+        st.audio(st.session_state.ai_audio, format="audio/mp3", autoplay=st.session_state.ai_audio_pending)
         if st.session_state.ai_audio_pending:
             st.caption("Đang thử tự phát phản hồi bằng giọng tiếng Việt. Nếu trình duyệt chặn, bấm nút phát.")
             st.session_state.ai_audio_pending = False
+    st.caption("Gợi ý nhanh:")
+    quick_cols = st.columns(2)
+    for col, suggestion in zip(quick_cols, ["Ấm áp, dịu nhẹ", "Thanh mát, trong lành"]):
+        with col:
+            if st.button(suggestion, use_container_width=True, key="quick_"+suggestion):
+                st.session_state.quick_prompt = suggestion
+                st.rerun()
 
-with right:
-    st.subheader("2. Công thức phối hương")
-    st.caption("Tỷ lệ sẽ tự cập nhật ngay sau mỗi phản hồi của AI — không cần nút áp dụng.")
+with formula_col:
+    st.markdown('<div class="panel-title">🍂 Tùy chỉnh công thức</div>', unsafe_allow_html=True)
+    batch_ml = st.number_input("Dung tích pha chế (mL)", min_value=1.0, max_value=20.0, value=10.0, step=1.0)
+    st.caption("1 mL                                              20 mL")
     edited = {}
     for name, default in DEFAULTS.items():
         slider_key = f"slider_{name}"
         if slider_key not in st.session_state:
             st.session_state[slider_key] = float(st.session_state.formula.get(name, default))
-        edited[name] = st.slider(
-            f"{name} — {LAYERS[name]} (%)",
-            min_value=0.0,
-            max_value=20.0,
-            step=0.1,
-            key=slider_key,
-        )
-
+        edited[name] = st.slider(f"{name} ({LAYERS[name]})", min_value=0.0, max_value=20.0, step=0.1, key=slider_key, format="%.2f%%")
     if st.button("Lưu chỉnh sửa thủ công", use_container_width=True):
         st.session_state.formula = edited.copy()
         st.success("Đã cập nhật công thức.")
@@ -566,39 +561,32 @@ st.session_state.formula = formula
 total_aroma = sum(formula.values())
 solvent = max(0.0, 100.0 - total_aroma)
 
-st.divider()
-st.subheader("3. Công thức quy đổi")
-st.caption("Tỷ lệ tính trên toàn bộ công thức; dung môi được tính tự động để tổng bằng 100%.")
-rows = []
-for name, percent in formula.items():
-    rows.append({
-        "Thành phần": name,
-        "Tầng hương / vai trò": LAYERS[name],
-        "Tỷ lệ (%)": round(percent, 2),
-        f"Thể tích ({batch_ml:g} mL)": round(percent / 100 * batch_ml, 3),
-    })
-rows.append({
-    "Thành phần": "Dung môi (theo công thức nền)",
-    "Tầng hương / vai trò": "Dung môi",
-    "Tỷ lệ (%)": round(solvent, 2),
-    f"Thể tích ({batch_ml:g} mL)": round(solvent / 100 * batch_ml, 3),
-})
-df = pd.DataFrame(rows)
-st.dataframe(df, use_container_width=True, hide_index=True)
-st.metric("Tổng tỷ lệ", f"{sum(formula.values()) + solvent:.2f}%")
-st.download_button(
-    "Tải công thức CSV",
-    data=df.to_csv(index=False).encode("utf-8-sig"),
-    file_name="thu_vu_ai_formula.csv",
-    mime="text/csv",
-    use_container_width=True,
-)
+summary_col, description_col = st.columns([1.42, 1.28], gap="small")
+with summary_col:
+    st.markdown('<div class="panel-title">🍂 Tổng hợp công thức</div>', unsafe_allow_html=True)
+    rows = []
+    for name, percent in formula.items():
+        rows.append({"Thành phần": name, "Tỉ lệ (%)": f"{percent:.3f}", "Thể tích (mL)": f"{percent / 100 * batch_ml:.3f}"})
+    rows.append({"Thành phần": "Dung môi (cồn + nước)", "Tỉ lệ (%)": f"{solvent:.3f}", "Thể tích (mL)": f"{solvent / 100 * batch_ml:.3f}"})
+    rows.append({"Thành phần": "TỔNG CỘNG", "Tỉ lệ (%)": f"{sum(formula.values()) + solvent:.3f}", "Thể tích (mL)": f"{batch_ml:.3f}"})
+    df = pd.DataFrame(rows)
+    st.dataframe(df, use_container_width=True, hide_index=True, height=290)
+    valid = total_aroma <= 100.0 and abs((total_aroma + solvent) - 100.0) < 0.01
+    if valid:
+        st.success("Công thức hợp lệ (tổng = 100%)")
+    else:
+        st.error("Tổng tỷ lệ chưa hợp lệ.")
+    st.download_button("⬇ Tải công thức (CSV)", data=df.to_csv(index=False).encode("utf-8-sig"), file_name="thu_vu_ai_formula.csv", mime="text/csv", use_container_width=True, disabled=not valid)
 
-with st.expander("Lưu ý quan trọng"):
-    st.write(
-        "Bạn có thể trò chuyện nhiều lượt bằng văn bản hoặc ghi âm; Gemini dùng ngữ cảnh các lượt gần nhất để tư vấn. Tỷ lệ AI đề xuất được cập nhật trực tiếp vào thanh trượt. "
-        "Lời chào khi mở giao diện chính và toàn bộ nội dung phản hồi của AI đều được đọc thử tự động bằng giọng tiếng Việt Hoài My Neural qua Edge TTS, cần kết nối mạng. Trình duyệt có thể chặn tự phát âm thanh; khi đó hãy bấm nút phát trên thanh âm thanh. AI chỉ diễn giải cảm nhận chủ quan và đề xuất tỷ lệ, "
-        "không xác nhận an toàn hoặc bảo đảm hiệu quả lưu hương. Hãy kiểm tra giới hạn sử dụng của từng nguyên liệu "
-        "và thử nghiệm quy mô nhỏ trước khi sử dụng."
-    )
+with description_col:
+    st.markdown('<div class="panel-title">🌿 Mô tả mùi hương</div>', unsafe_allow_html=True)
+    ai_result = st.session_state.get("ai_result") or {}
+    description = ai_result.get("description") or ai_result.get("summary") or ai_result.get("spoken_response")
+    if description:
+        st.markdown('<div class="description-panel">'+html.escape(str(description))+'</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="description-panel" style="text-align:center;display:flex;flex-direction:column;justify-content:center;align-items:center"><div style="font-size:2rem;color:#b1844e">♧</div><p>AI sẽ phân tích và mô tả mùi hương dựa trên công thức của bạn.</p></div>', unsafe_allow_html=True)
+    st.warning("Cần giáo viên duyệt an toàn trước khi pha.")
 
+with st.expander("Hướng dẫn và lưu ý quan trọng"):
+    st.write("Bạn có thể trò chuyện nhiều lượt bằng văn bản hoặc ghi âm; Gemini dùng ngữ cảnh các lượt gần nhất để tư vấn. Tỷ lệ AI đề xuất được cập nhật trực tiếp vào thanh trượt. Lời chào khi mở giao diện chính và phản hồi của AI được đọc thử bằng giọng tiếng Việt Hoài My Neural qua Edge TTS, cần kết nối mạng. Trình duyệt có thể chặn tự phát âm thanh. AI không xác nhận an toàn hoặc bảo đảm hiệu quả lưu hương; hãy kiểm tra giới hạn sử dụng của từng nguyên liệu và thử nghiệm quy mô nhỏ trước khi sử dụng.")
