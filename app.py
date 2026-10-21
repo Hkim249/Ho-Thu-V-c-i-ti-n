@@ -104,7 +104,6 @@ st.markdown(
     }
     .welcome-kicker { color: #ffd8a8 !important; letter-spacing: .28em; text-transform: uppercase; font-size: .8rem; margin-bottom: 16px; }
     .welcome-title { color: #fff7ec !important; font-size: clamp(3rem, 8vw, 6rem); line-height: 1.05; font-weight: 700; margin: 0; text-shadow: 0 4px 24px rgba(0,0,0,.5); }
-    .welcome-subtitle { max-width: 650px; margin: 18px auto 28px auto; color: #fff1df !important; font-size: 1.1rem; line-height: 1.7; text-shadow: 0 2px 10px rgba(0,0,0,.55); }
     .welcome-action div[data-testid="stButton"] > button { min-height: 3.4rem; padding: 0 3rem; border-radius: 999px; font-size: 1.05rem; background: linear-gradient(110deg, #9e512e, #d69a53); border: 1px solid #ffe1b6; box-shadow: 0 8px 26px rgba(0,0,0,.3); }
     </style>
     <div class="autumn-banner">
@@ -135,7 +134,7 @@ Bạn là chuyên gia tư vấn mùi hương và trợ lý phối hương cho Th
 Hãy hiểu mô tả tự nhiên của người dùng, kể cả bản chép lời từ giọng nói, rồi đề xuất công thức
 chỉ dùng các nguyên liệu có sẵn: Cam, Gỗ thông, Hoa nhài, Vanilla, Chất định hương.
 Phân tích độ tươi/citrus, xanh-gỗ, hoa, ngọt-ấm, độ đậm, độ sạch, độ lưu hương và bối cảnh sử dụng.
-Không tuyên bố đo chính xác cảm nhận chủ quan. Trả lời bằng tiếng Việt, ngắn gọn.
+Không tuyên bố đo chính xác cảm nhận chủ quan. Luôn trả lời bằng tiếng Việt tự nhiên. Khi nói với người dùng, gọi họ là “bạn” và tự xưng là “mình”; không dùng “tôi”, “quý khách” hoặc cách xưng hô khác.
 Khi thiếu thông tin quan trọng, hãy đặt một câu hỏi làm rõ nhưng vẫn trả công thức đề xuất tốt nhất hiện tại.
 Tỷ lệ trong percentages là phần trăm của toàn bộ công thức, không phải tỷ lệ tinh dầu nguyên chất.
 Giữ mỗi thành phần trong khoảng 0–20%, tổng nguyên liệu không vượt quá 40%, chất định hương không vượt quá 10%.
@@ -154,7 +153,7 @@ Chỉ trả về JSON hợp lệ theo schema:
   },
   "reasoning": ["lý do 1", "lý do 2"],
   "intensity": "nhẹ/vừa/đậm",
-  "spoken_response": "một câu tư vấn ngắn, tự nhiên để đọc thành tiếng"
+  "spoken_response": "phản hồi đầy đủ, tự nhiên bằng tiếng Việt, xưng mình và gọi người dùng là bạn; nội dung này sẽ được đọc thành tiếng"
 }
 """
 
@@ -211,8 +210,9 @@ def get_ai_suggestion(message, current_values, api_key, model, conversation_hist
         "current_formula_percent": current_values,
         "available_ingredients": list(DEFAULTS.keys()),
         "task": (
-            "Hãy trò chuyện như một chuyên viên tư vấn nước hoa: phản hồi trực tiếp điều người dùng vừa nói, "
-            "nhớ ngữ cảnh các lượt trước, hỏi thêm khi cần và vẫn đề xuất công thức tốt nhất hiện tại. "
+            "Hãy trò chuyện như một chuyên viên tư vấn nước hoa: luôn gọi người dùng là bạn và xưng mình, "
+            "phản hồi trực tiếp điều người dùng vừa nói, nhớ ngữ cảnh các lượt trước, hỏi thêm khi cần "
+            "và vẫn đề xuất công thức tốt nhất hiện tại. Nội dung phản hồi phải bằng tiếng Việt. "
             "Nếu có âm thanh đính kèm, hãy nghe và hiểu lời nói trong âm thanh. "
             "Mỗi lượt phải trả lời tự nhiên, hữu ích, không chỉ lặp lại công thức."
         ),
@@ -271,58 +271,57 @@ if "welcome_audio" not in st.session_state:
     st.session_state.welcome_audio = None
 if "welcome_audio_error" not in st.session_state:
     st.session_state.welcome_audio_error = None
+if "main_greeting_pending" not in st.session_state:
+    st.session_state.main_greeting_pending = False
+if "main_greeting_audio" not in st.session_state:
+    st.session_state.main_greeting_audio = None
+if "main_greeting_error" not in st.session_state:
+    st.session_state.main_greeting_error = None
 
 if not st.session_state.intro_done:
-    greeting = "Chào mừng bạn đã đến với ứng dụng chế tạo nước hoa Thu Vũ."
+    greeting = "chào mừng bạn đã đến với ứng dụng điều chế nước hoa thu vũ, nơi tạo ra mùa thu theo cách riêng của bạn. Hãy ấn nút bắt đầu để tiếp tục"
     if st.session_state.welcome_audio is None and st.session_state.welcome_audio_error is None:
         try:
             st.session_state.welcome_audio = generate_vietnamese_audio(greeting)
         except Exception as exc:
             st.session_state.welcome_audio_error = str(exc)
 
+    # Keep the original cover image and title, but do not display the greeting text or audio controls.
     st.markdown(
         """<div class="welcome-screen">
           <div class="welcome-kicker">Autumn Fragrance Studio</div>
           <h1 class="welcome-title">Thu Vũ</h1>
-          <p class="welcome-subtitle">Chạm vào hương thu, tạo nên mùi hương mang dấu ấn riêng của bạn.</p>
         </div>""",
         unsafe_allow_html=True,
     )
     if st.session_state.welcome_audio:
-        # Tự thử phát ngay khi màn hình chào mừng được tải. Một số trình duyệt
-        # chặn autoplay có tiếng; khi đó người dùng vẫn có nút phát dự phòng.
+        # Hidden audio player: attempt automatic Vietnamese speech without showing text or controls.
         audio_b64 = base64.b64encode(st.session_state.welcome_audio).decode("ascii")
         components.html(
-            f"""<!doctype html><html><body style="margin:0;background:transparent;font-family:Arial,sans-serif">
-            <audio id="thu-vu-greeting" controls autoplay playsinline preload="auto" style="width:100%">
+            f"""<!doctype html><html><body style="margin:0;background:transparent">
+            <audio id="thu-vu-greeting" autoplay playsinline preload="auto" style="display:none">
               <source src="data:audio/mpeg;base64,{audio_b64}" type="audio/mpeg">
             </audio>
-            <div id="autoplay-note" style="font-size:12px;color:#fff1df;text-align:center;margin-top:4px;display:none">
-              Trình duyệt đang chặn tự phát âm thanh. Bấm nút phát trên thanh audio để nghe lời chào.
-            </div>
             <script>
               const player = document.getElementById('thu-vu-greeting');
-              const note = document.getElementById('autoplay-note');
               const tryPlayGreeting = () => {{
                 const attempt = player.play();
-                if (attempt !== undefined) {{
-                  attempt.then(() => {{ note.style.display = 'none'; }})
-                    .catch(() => {{ note.style.display = 'block'; }});
-                }}
+                if (attempt !== undefined) attempt.catch(() => {{}});
               }};
               player.addEventListener('canplay', tryPlayGreeting, {{ once: true }});
               tryPlayGreeting();
             </script></body></html>""",
-            height=66,
+            height=0,
             scrolling=False,
         )
-    else:
-        st.caption("Không tạo được lời chào tự động. Kiểm tra kết nối Internet và tải lại trang.")
     spacer_left, start_col, spacer_right = st.columns([1, 1, 1])
     with start_col:
         st.markdown('<div class="welcome-action">', unsafe_allow_html=True)
         if st.button("Bắt đầu", type="primary", use_container_width=True):
             st.session_state.intro_done = True
+            st.session_state.main_greeting_pending = True
+            st.session_state.main_greeting_audio = None
+            st.session_state.main_greeting_error = None
             st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
@@ -333,10 +332,46 @@ model = str(secret_model or os.getenv("GOOGLE_MODEL", "gemini-3.1-flash-lite")).
 
 with st.sidebar:
     st.header("🍁 Cài đặt AI")
-    st.caption("Đang sử dụng Gemini 2.5 Flash. API key được đọc tự động từ Streamlit Secrets.")
     st.divider()
     batch_ml = st.number_input("Dung tích mẻ (mL)", min_value=1.0, max_value=10000.0, value=10.0, step=1.0)
     st.caption("Mỗi phản hồi tư vấn sẽ tự cập nhật công thức ở các thanh trượt bên phải.")
+
+# When the main screen first opens, automatically try to read the existing consultant greeting.
+# Browsers may block autoplay with sound; the audio controls remain available as a fallback.
+if st.session_state.main_greeting_pending:
+    main_greeting = (
+        "Chào bạn! Mình là chuyên viên tư vấn mùi hương của Thu Vũ. "
+        "Bạn muốn tạo mùi hương như thế nào? Có thể kể về cảm giác, nguyên liệu yêu thích "
+        "hoặc hoàn cảnh sử dụng nhé."
+    )
+    if st.session_state.main_greeting_audio is None and st.session_state.main_greeting_error is None:
+        try:
+            with st.spinner("Chuyên viên Thu Vũ đang chuẩn bị lời chào…"):
+                st.session_state.main_greeting_audio = generate_vietnamese_audio(main_greeting)
+        except Exception as exc:
+            st.session_state.main_greeting_error = str(exc)
+    if st.session_state.main_greeting_audio:
+        greeting_b64 = base64.b64encode(st.session_state.main_greeting_audio).decode("ascii")
+        components.html(
+            f"""<!doctype html><html><body style=\"margin:0;background:transparent;font-family:Arial,sans-serif\">
+            <audio id=\"thu-vu-main-greeting\" autoplay playsinline preload=\"auto\" style=\"display:none\">
+              <source src=\"data:audio/mpeg;base64,{greeting_b64}\" type=\"audio/mpeg\">
+            </audio>
+            <script>
+              const player = document.getElementById('thu-vu-main-greeting');
+              const attemptPlay = () => {{
+                const attempt = player.play();
+                if (attempt !== undefined) attempt.catch(() => {{}});
+              }};
+              player.addEventListener('canplay', attemptPlay, {{ once: true }});
+              attemptPlay();
+            </script></body></html>""",
+            height=0,
+            scrolling=False,
+        )
+    elif st.session_state.main_greeting_error:
+        st.caption("Chưa phát được lời chào tự động. Bạn vẫn có thể bắt đầu trò chuyện; hãy kiểm tra kết nối mạng nếu muốn nghe giọng đọc.")
+    st.session_state.main_greeting_pending = False
 
 # Keep all user input handling before slider widgets are instantiated so their values
 # can be updated safely in the same Streamlit rerun.
@@ -440,7 +475,8 @@ with left:
                 st.session_state.chat_history.append({"role": "user", "content": user_display})
                 st.session_state.chat_history.append({"role": "assistant", "content": assistant_reply})
                 st.session_state.ai_result = result
-                st.session_state.ai_audio_text = str(result.get("spoken_response") or result.get("summary", "")).strip()
+                # Read the complete assistant result, including any follow-up question and explanation.
+                st.session_state.ai_audio_text = assistant_reply.strip()
                 st.session_state.ai_audio = None
                 st.session_state.ai_audio_pending = False
                 st.session_state.chat_error = None
@@ -529,7 +565,7 @@ st.download_button(
 with st.expander("Lưu ý quan trọng"):
     st.write(
         "Bạn có thể trò chuyện nhiều lượt bằng văn bản hoặc ghi âm; Gemini dùng ngữ cảnh các lượt gần nhất để tư vấn. Tỷ lệ AI đề xuất được cập nhật trực tiếp vào thanh trượt. "
-        "Phần đọc tư vấn dùng giọng tiếng Việt Hoài My Neural qua Edge TTS và cần kết nối mạng. Trình duyệt có thể chặn tự phát âm thanh; khi đó hãy bấm nút phát trên thanh âm thanh. AI chỉ diễn giải cảm nhận chủ quan và đề xuất tỷ lệ, "
+        "Lời chào khi mở giao diện chính và toàn bộ nội dung phản hồi của AI đều được đọc thử tự động bằng giọng tiếng Việt Hoài My Neural qua Edge TTS, cần kết nối mạng. Trình duyệt có thể chặn tự phát âm thanh; khi đó hãy bấm nút phát trên thanh âm thanh. AI chỉ diễn giải cảm nhận chủ quan và đề xuất tỷ lệ, "
         "không xác nhận an toàn hoặc bảo đảm hiệu quả lưu hương. Hãy kiểm tra giới hạn sử dụng của từng nguyên liệu "
         "và thử nghiệm quy mô nhỏ trước khi sử dụng."
     )
