@@ -13,12 +13,14 @@ except ImportError:
     edge_tts = None
 
 try:
-    # Official modern Gemini SDK; supports Gemini 3.8 Flash.
-    from google import genai
-    from google.genai import types
+    import requests
 except ImportError:
-    genai = None
-    types = None
+    requests = None
+
+try:
+    from faster_whisper import WhisperModel
+except ImportError:
+    WhisperModel = None
 
 st.set_page_config(
     page_title="Thu Vũ AI — Autumn Fragrance Studio",
@@ -176,49 +178,100 @@ def normalize_percentages(values):
         cleaned = {key: value * scale for key, value in cleaned.items()}
     return cleaned
 
-def call_gemini(prompt, api_key, model, audio_bytes=None, audio_mime="audio/wav"):
-    """Call Gemini 3.8 Flash using the official google-genai SDK."""
-    if genai is None or types is None:
-        raise RuntimeError(
-            "Chưa cài google-genai. Hãy cài các gói trong requirements.txt rồi chạy lại app."
-        )
+@st.cache_resource
+def get_whisper_model():
+    """Load the local speech model once and reuse it between Streamlit reruns."""
+    if WhisperModel is None:
+        raise RuntimeError("Chưa cài faster-whisper. Hãy cài các gói trong requirements.txt.")
+    return WhisperModel("small", device="cpu", compute_type="int8")
 
-    # API key is loaded from Streamlit Secrets/environment; it is never requested in the UI.
-    client = genai.Client(api_key=api_key)
-    contents = [prompt]
-    if audio_bytes:
-        contents.append(types.Part.from_bytes(data=audio_bytes, mime_type=audio_mime))
 
-    # Gemini 3.8 Flash uses the current API settings; deprecated sampling options are omitted.
-    response = client.models.generate_content(
-        model=model,
-        contents=contents,
-        config={"response_mime_type": "application/json"},
-    )
-    response_text = getattr(response, "text", None)
-    if not response_text:
-        raise RuntimeError("Gemini không trả về nội dung. Hãy thử lại.")
+def transcribe_audio_locally(audio_bytes, audio_mime="audio/wav"):
+    """Transcribe voice locally; no external transcription API."""
+    if WhisperModel is None:
+        raise RuntimeError("Chưa cài faster-whisper. Hãy cài các gói trong requirements.txt.")
+    import tempfile
+    suffix = ".wav"
+    mime = (audio_mime or "").lower()
+    if "mpeg" in mime or "mp3" in mime:
+        suffix = ".mp3"
+    elif "webm" in mime:
+        suffix = ".webm"
+    elif "mp4" in mime:
+        suffix = ".mp4"
+    temp_path = None
     try:
-        return json.loads(response_text)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError("Gemini trả về dữ liệu không đúng định dạng JSON. Hãy gửi lại yêu cầu.") from exc
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
+            f.write(audio_bytes)
+            temp_path = f.name
+        whisper = get_whisper_model()
+        segments, _ = whisper.transcribe(temp_path, language="vi", vad_filter=True)
+        transcript = " ".join(s.text.strip() for s in segments).strip()
+        if not transcript:
+            raise RuntimeError("Không nhận diện được lời nói. Hãy ghi âm rõ hơn rồi gửi lại.")
+        return transcript
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.remove(temp_path)
 
-def get_ai_suggestion(message, current_values, api_key, model, conversation_history=None, audio_bytes=None, audio_mime="audio/wav"):
-    """Return one consultant response and a fresh formula for the current conversation turn."""
+
+def call_ollama(prompt, base_url, model):
+    """Call an Ollama model hosted on a machine you control."""
+    if requests is None:
+        raise RuntimeError("Chưa cài requests. Hãy cài requirements.txt.")
+    endpoint = base_url.rstrip("/") + "/api/chat"
     payload = {
-        "current_user_message": message or "",
+        "model": model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt}
+        ],
+        "stream": False,
+        "format": "json",
+        "options": {"temperature": 0.3}
+    }
+    try:
+        response = requests.post(endpoint, json=payload, timeout=300)
+        response.raise_for_status()
+    except requests.exceptions.ConnectionError as exc:
+        raise RuntimeError("Không kết nối được Ollama. Hãy khởi động Ollama và kiểm tra OLLAMA_BASE_URL.") from exc
+    except requests.exceptions.Timeout as exc:
+        raise RuntimeError("AI phản hồi quá lâu. Hãy thử model nhẹ hơn hoặc kiểm tra tài nguyên máy.") from exc
+    except requests.exceptions.HTTPError as exc:
+        try:
+            detail = response.json().get("error", "")
+        except Exception:
+            detail = ""
+        raise RuntimeError(f"Ollama báo lỗi: {detail or response.status_code}") from exc
+    try:
+        content = response.json().get("message", {}).get("content", "")
+        return json.loads(content)
+    except (ValueError, TypeError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Model không trả về JSON hợp lệ. Hãy gửi lại yêu cầu hoặc thử model khác.") from exc
+
+
+def get_ai_suggestion(message, current_values, base_url, model,
+                      conversation_history=None, audio_bytes=None, audio_mime="audio/wav"):
+    """Return consultant response and formula; voice is transcribed locally first."""
+    actual_message = message or ""
+    if audio_bytes:
+        actual_message = transcribe_audio_locally(audio_bytes, audio_mime)
+    payload = {
+        "current_user_message": actual_message,
         "conversation_history": conversation_history or [],
         "current_formula_percent": current_values,
         "available_ingredients": list(DEFAULTS.keys()),
         "task": (
-            "Hãy trò chuyện như một chuyên viên tư vấn nước hoa: phản hồi trực tiếp điều người dùng vừa nói, "
+            "Trò chuyện như chuyên viên tư vấn nước hoa: phản hồi trực tiếp điều người dùng vừa nói, "
             "nhớ ngữ cảnh các lượt trước, hỏi thêm khi cần và vẫn đề xuất công thức tốt nhất hiện tại. "
-            "Nếu có âm thanh đính kèm, hãy nghe và hiểu lời nói trong âm thanh. "
-            "Mỗi lượt phải trả lời tự nhiên, hữu ích, không chỉ lặp lại công thức."
+            "Phân tích yêu cầu bằng tiếng Việt, không chỉ lặp lại công thức."
         ),
     }
-    prompt = SYSTEM_PROMPT + "\n\nDữ liệu cuộc trò chuyện hiện tại:\n" + json.dumps(payload, ensure_ascii=False)
-    return call_gemini(prompt, api_key, model, audio_bytes, audio_mime)
+    prompt = "Dữ liệu cuộc trò chuyện hiện tại:\\n" + json.dumps(payload, ensure_ascii=False)
+    result = call_ollama(prompt, base_url, model)
+    result["_transcript"] = actual_message if audio_bytes else ""
+    return result
+
 
 async def _generate_vietnamese_audio(text_to_speak):
     """Generate Vietnamese neural speech audio with Edge TTS."""
@@ -258,11 +311,11 @@ if "chat_error" not in st.session_state:
     st.session_state.chat_error = None
 
 try:
-    secret_api_key = st.secrets.get("GOOGLE_API_KEY", "")
-    secret_model = st.secrets.get("GOOGLE_MODEL", "gemini-3.8-flash")
+    secret_ollama_url = st.secrets.get("OLLAMA_BASE_URL", "http://localhost:11434")
+    secret_model = st.secrets.get("OLLAMA_MODEL", "qwen2.5:7b")
 except Exception:
-    secret_api_key = ""
-    secret_model = "gemini-3.8-flash"
+    secret_ollama_url = "http://localhost:11434"
+    secret_model = "qwen2.5:7b"
 
 # Welcome screen: play the Vietnamese greeting once, then reveal the original app.
 if "intro_done" not in st.session_state:
@@ -327,16 +380,17 @@ if not st.session_state.intro_done:
         st.markdown('</div>', unsafe_allow_html=True)
     st.stop()
 
-# API key is read from Streamlit Secrets (or the environment); it is never requested in the UI.
-api_key = str(secret_api_key or os.getenv("GOOGLE_API_KEY", "")).strip()
-model = str(secret_model or os.getenv("GOOGLE_MODEL", "gemini-3.8-flash")).strip()
+# Ollama runs the model on a machine you control; no provider API key is required.
+ollama_base_url = str(secret_ollama_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")).strip()
+model = str(secret_model or os.getenv("OLLAMA_MODEL", "qwen2.5:7b")).strip()
 
 with st.sidebar:
     st.header("🍁 Cài đặt AI")
-    st.caption("Đang sử dụng Gemini 3.8 Flash. API key được đọc tự động từ Streamlit Secrets.")
+    st.caption("Đang dùng Ollama chạy cục bộ; không cần API key của nhà cung cấp AI.")
     st.divider()
     batch_ml = st.number_input("Dung tích mẻ (mL)", min_value=1.0, max_value=10000.0, value=10.0, step=1.0)
     st.caption("Mỗi phản hồi tư vấn sẽ tự cập nhật công thức ở các thanh trượt bên phải.")
+    st.caption("Ollama phải chạy trên máy chạy app hoặc tại địa chỉ OLLAMA_BASE_URL có thể truy cập.")
 
 # Keep all user input handling before slider widgets are instantiated so their values
 # can be updated safely in the same Streamlit rerun.
@@ -386,22 +440,20 @@ with left:
             incoming_mime = voice_mime
 
     if incoming_message is not None:
-        if not api_key.strip():
-            st.error("Chưa tìm thấy GOOGLE_API_KEY trong Streamlit Secrets. Hãy kiểm tra cấu hình Secrets của ứng dụng.")
-        elif genai is None:
-            st.error("Chưa cài google-genai. Hãy cài lại các gói trong requirements.txt rồi triển khai app.")
+        if requests is None:
+            st.error("Chưa cài requests. Hãy cài lại các gói trong requirements.txt.")
         else:
-            # Send prior turns to Gemini as context, excluding any unprocessed turn.
+            # Send prior turns to the local Ollama model as context.
             history_for_model = [
                 {"role": item["role"], "content": item["content"]}
                 for item in st.session_state.chat_history[-12:]
             ]
             try:
-                with st.spinner("Chuyên viên Thu Vũ đang lắng nghe và tư vấn…"):
+                with st.spinner("Chuyên viên Thu Vũ đang phân tích yêu cầu…"):
                     result = get_ai_suggestion(
                         incoming_message,
                         st.session_state.formula,
-                        api_key.strip(),
+                        ollama_base_url,
                         model.strip(),
                         conversation_history=history_for_model,
                         audio_bytes=incoming_audio,
@@ -433,7 +485,7 @@ with left:
                     assistant_reply += "\n\n" + "\n".join(extra_lines)
 
                 if incoming_audio is not None:
-                    user_display = "🎙️ Tin nhắn thoại đã gửi (Gemini đã phân tích âm thanh)."
+                    user_display = "🎙️ " + str(result.get("_transcript") or "Đã gửi tin nhắn thoại.")
                     st.session_state.last_audio_digest = incoming_digest
                 else:
                     user_display = incoming_message
@@ -453,7 +505,7 @@ with left:
                         st.session_state.chat_error = "Tư vấn đã có, nhưng chưa tạo được giọng đọc: " + str(tts_exc)
                 st.rerun()
             except json.JSONDecodeError:
-                st.error("Gemini trả về dữ liệu không đúng JSON. Hãy gửi lại tin nhắn nhé.")
+                st.error("Ollama trả về dữ liệu không đúng JSON. Hãy gửi lại tin nhắn nhé.")
             except Exception as exc:
                 st.error(f"Không thể xử lý cuộc trò chuyện: {exc}")
 
@@ -528,10 +580,8 @@ st.download_button(
 
 with st.expander("Lưu ý quan trọng"):
     st.write(
-        "Bạn có thể trò chuyện nhiều lượt bằng văn bản hoặc ghi âm; Gemini dùng ngữ cảnh các lượt gần nhất để tư vấn. Tỷ lệ AI đề xuất được cập nhật trực tiếp vào thanh trượt. "
+        "Bạn có thể trò chuyện nhiều lượt bằng văn bản hoặc ghi âm; Ollama dùng ngữ cảnh các lượt gần nhất để tư vấn. Tỷ lệ AI đề xuất được cập nhật trực tiếp vào thanh trượt. "
         "Phần đọc tư vấn dùng giọng tiếng Việt Hoài My Neural qua Edge TTS và cần kết nối mạng. Trình duyệt có thể chặn tự phát âm thanh; khi đó hãy bấm nút phát trên thanh âm thanh. AI chỉ diễn giải cảm nhận chủ quan và đề xuất tỷ lệ, "
         "không xác nhận an toàn hoặc bảo đảm hiệu quả lưu hương. Hãy kiểm tra giới hạn sử dụng của từng nguyên liệu "
         "và thử nghiệm quy mô nhỏ trước khi sử dụng."
     )
-
-
