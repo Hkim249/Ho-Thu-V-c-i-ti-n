@@ -259,10 +259,10 @@ if "chat_error" not in st.session_state:
 
 try:
     secret_api_key = st.secrets.get("GOOGLE_API_KEY", "")
-    secret_model = st.secrets.get("GOOGLE_MODEL", "gemini-2.5-flash")
+    secret_model = st.secrets.get("GOOGLE_MODEL", "gemini-3.1-flash-lite")
 except Exception:
     secret_api_key = ""
-    secret_model = "gemini-2.5-flash"
+    secret_model = "gemini-3.1-flash-lite"
 
 # Welcome screen: play the Vietnamese greeting once, then reveal the original app.
 if "intro_done" not in st.session_state:
@@ -329,7 +329,7 @@ if not st.session_state.intro_done:
 
 # API key is read from Streamlit Secrets (or the environment); it is never requested in the UI.
 api_key = str(secret_api_key or os.getenv("GOOGLE_API_KEY", "")).strip()
-model = str(secret_model or os.getenv("GOOGLE_MODEL", "gemini-2.5-flash")).strip()
+model = str(secret_model or os.getenv("GOOGLE_MODEL", "gemini-3.1-flash-lite")).strip()
 
 with st.sidebar:
     st.header("🍁 Cài đặt AI")
