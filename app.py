@@ -596,7 +596,7 @@ with chat_col:
                     # Keep technical details in server logs only; show users a concise message.
                     # Preserve the current formula if the request fails.
                     logging.exception("Thu Vu chat request failed")
-                    st.error("Chưa thể xử lý tin nhắn lúc này. M thử lại sau ít phút nhé; công thức hiện tại vẫn được giữ nguyên.")
+                    st.error("Không thể xử lý cuộc trò chuyện: Gemini đang bận hoặc kết nối bị gián đoạn. Vui lòng thử lại sau 20–60 giây; công thức hiện tại vẫn được giữ nguyên.")
 
         if st.session_state.chat_error:
             st.warning(st.session_state.chat_error)
