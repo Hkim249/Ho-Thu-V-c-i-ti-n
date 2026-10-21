@@ -201,20 +201,75 @@ def normalize_percentages(values):
         cleaned = {key: value * scale for key, value in cleaned.items()}
     return cleaned
 
+def _extract_json_object(text):
+    """Parse JSON returned by Gemini, tolerating accidental Markdown fences."""
+    if not text or not str(text).strip():
+        raise RuntimeError("Gemini không trả về nội dung. Hãy thử gửi lại tin nhắn.")
+    raw = str(text).strip()
+    # Remove optional Markdown code fences without changing JSON contents.
+    raw = re.sub(r"^```(?:json)?\s*", "", raw, flags=re.IGNORECASE)
+    raw = re.sub(r"\s*```$", "", raw)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        # Some model responses may add a short sentence around the JSON.
+        first, last = raw.find("{"), raw.rfind("}")
+        if first < 0 or last <= first:
+            raise RuntimeError("Phản hồi AI không đúng định dạng. Hãy gửi lại yêu cầu ngắn gọn hơn.")
+        try:
+            data = json.loads(raw[first:last + 1])
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("AI trả về dữ liệu chưa hoàn chỉnh. Hãy gửi lại tin nhắn; công thức hiện tại vẫn được giữ nguyên.") from exc
+    if not isinstance(data, dict):
+        raise RuntimeError("Phản hồi AI không đúng cấu trúc. Hãy gửi lại tin nhắn.")
+    if not isinstance(data.get("percentages"), dict):
+        # Keep a valid answer usable if the model omitted formula fields.
+        data["percentages"] = DEFAULTS.copy()
+    return data
+
+
+def _friendly_gemini_error(exc):
+    """Translate common API errors into actionable Vietnamese messages."""
+    msg = str(exc)
+    low = msg.lower()
+    status = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+    if status is None:
+        match = re.search(r"\b(400|401|403|404|408|429|500|502|503|504)\b", low)
+        status = int(match.group(1)) if match else None
+    if status in (401, 403) or any(t in low for t in ("api key not valid", "permission_denied", "unauthorized")):
+        return "Google API Key không hợp lệ hoặc chưa được cấp quyền. Kiểm tra GOOGLE_API_KEY trong Secrets."
+    if status == 404 or "model not found" in low or "not_found" in low:
+        return "Không tìm thấy model Gemini đang cấu hình. Kiểm tra GOOGLE_MODEL trong Secrets; thử một model Gemini đang được bật cho API key của bạn."
+    if status == 429 or any(t in low for t in ("resource_exhausted", "quota exceeded", "rate limit")):
+        return "Gemini đã chạm giới hạn lượt gọi hoặc hạn mức. Chờ một lúc rồi gửi lại; công thức hiện tại chưa bị thay đổi."
+    if status in (500, 502, 503, 504) or any(t in low for t in ("temporarily unavailable", "overloaded", "connection reset", "timed out", "timeout")):
+        return "Gemini đang bận hoặc kết nối bị gián đoạn. Hãy thử lại sau 20–60 giây; công thức hiện tại vẫn được giữ nguyên."
+    if status == 400 or "invalid_argument" in low:
+        return "Gemini từ chối dữ liệu gửi lên. Nếu đang gửi ghi âm, hãy ghi âm lại ngắn hơn; nếu gửi văn bản, thử mô tả ngắn gọn hơn."
+    # Avoid showing long SDK traces in the UI while preserving a useful clue.
+    compact = re.sub(r"\s+", " ", msg).strip()
+    if len(compact) > 260:
+        compact = compact[:257] + "..."
+    return "Không xử lý được yêu cầu từ Gemini. " + (compact or "Hãy kiểm tra model và cấu hình API rồi thử lại.")
+
+
 def call_gemini(prompt, api_key, model, audio_bytes=None, audio_mime="audio/wav"):
-    """Call Gemini and retry transient overload/rate-limit/server errors with backoff."""
+    """Call Gemini with bounded retries and robust JSON/error handling."""
     if genai is None or types is None:
-        raise RuntimeError(
-            "Chưa cài google-genai. Hãy cài các gói trong requirements.txt rồi chạy lại app."
-        )
+        raise RuntimeError("Chưa cài google-genai. Hãy cài các gói trong requirements.txt rồi chạy lại app.")
+    if not api_key:
+        raise RuntimeError("Thiếu GOOGLE_API_KEY trong Streamlit Secrets.")
+    if not model:
+        model = "gemini-3.1-flash-lite"
 
     client = genai.Client(api_key=api_key)
     contents = [prompt]
     if audio_bytes:
-        contents.append(types.Part.from_bytes(data=audio_bytes, mime_type=audio_mime))
+        contents.append(types.Part.from_bytes(data=audio_bytes, mime_type=audio_mime or "audio/wav"))
 
-    retryable_statuses = {429, 500, 502, 503, 504}
-    max_attempts = 4  # first attempt + up to 3 retries
+    retryable_statuses = {408, 429, 500, 502, 503, 504}
+    max_attempts = 3  # avoid spending too much quota on retries
+    last_exc = None
     for attempt in range(max_attempts):
         try:
             response = client.models.generate_content(
@@ -222,41 +277,38 @@ def call_gemini(prompt, api_key, model, audio_bytes=None, audio_mime="audio/wav"
                 contents=contents,
                 config={
                     "response_mime_type": "application/json",
-                    "max_output_tokens": 700,
-                    "temperature": 0.25,
+                    "max_output_tokens": 900,
+                    "temperature": 0.2,
                 },
             )
             response_text = getattr(response, "text", None)
             if not response_text:
-                raise RuntimeError("Gemini không trả về nội dung. Hãy thử lại.")
-            try:
-                return json.loads(response_text)
-            except json.JSONDecodeError as exc:
-                raise RuntimeError("Gemini trả về dữ liệu không đúng định dạng JSON. Hãy gửi lại yêu cầu.") from exc
+                # Include finish reason in the diagnostic, e.g. if output was blocked.
+                finish_reason = ""
+                try:
+                    finish_reason = str(response.candidates[0].finish_reason)
+                except Exception:
+                    pass
+                if finish_reason:
+                    raise RuntimeError(f"Gemini không trả về nội dung (lý do: {finish_reason}). Hãy thử gửi lại.")
+                raise RuntimeError("Gemini không trả về nội dung. Hãy thử gửi lại tin nhắn.")
+            return _extract_json_object(response_text)
         except Exception as exc:
+            last_exc = exc
             status = getattr(exc, "status_code", None) or getattr(exc, "code", None)
-            message = str(exc).lower()
+            low = str(exc).lower()
             if status is None:
-                for candidate in retryable_statuses:
-                    if str(candidate) in message or f"http {candidate}" in message:
-                        status = candidate
-                        break
-                if "resource_exhausted" in message or "rate limit" in message:
-                    status = 429
-                elif "service unavailable" in message or "overloaded" in message:
-                    status = 503
-            should_retry = status in retryable_statuses or any(
-                token in message for token in ("temporarily unavailable", "connection reset", "timed out", "timeout")
+                match = re.search(r"\b(408|429|500|502|503|504)\b", low)
+                status = int(match.group(1)) if match else None
+            transient = status in retryable_statuses or any(
+                token in low for token in ("temporarily unavailable", "connection reset", "timed out", "timeout", "overloaded")
             )
-            if not should_retry or attempt >= max_attempts - 1:
-                if should_retry:
-                    raise RuntimeError(
-                        "Gemini vẫn đang quá tải hoặc giới hạn lượt gọi sau 4 lần thử. "
-                        "Đợi khoảng 30–60 giây rồi gửi lại; công thức hiện tại vẫn được giữ nguyên."
-                    ) from exc
-                raise
-            delay = min(8.0, 1.5 * (2 ** attempt)) + random.uniform(0, 0.5)
-            time.sleep(delay)
+            if not transient or attempt >= max_attempts - 1:
+                if isinstance(exc, RuntimeError) and str(exc).startswith(("Gemini không trả", "Phản hồi AI", "AI trả")):
+                    raise
+                raise RuntimeError(_friendly_gemini_error(exc)) from exc
+            time.sleep(min(4.0, 1.0 * (2 ** attempt)) + random.uniform(0, 0.25))
+    raise RuntimeError(_friendly_gemini_error(last_exc or Exception("Lỗi không xác định")))
 
 def get_ai_suggestion(message, current_values, api_key, model, conversation_history=None, audio_bytes=None, audio_mime="audio/wav"):
     """Return one consultant response and a fresh formula for the current conversation turn."""
@@ -277,7 +329,7 @@ def get_ai_suggestion(message, current_values, api_key, model, conversation_hist
         "task": (
             "Tư vấn tự nhiên bằng tiếng Việt; xưng mình, gọi người dùng là bạn. "
             "Trả lời đúng ý mới nhất, dùng ngữ cảnh gần đây, nghe âm thanh nếu có, "
-            "đề xuất công thức hợp lệ và giải thích ngắn gọn."
+            "đề xuất công thức hợp lệ, câu trả lời ngắn gọn (2–4 câu), JSON hợp lệ và không có Markdown."
         ),
     }
     prompt = SYSTEM_PROMPT + "\n\nDữ liệu cuộc trò chuyện hiện tại:\n" + json.dumps(payload, ensure_ascii=False)
@@ -492,6 +544,8 @@ with chat_col:
                             incoming_message, st.session_state.formula, api_key, model,
                             conversation_history=history_for_model, audio_bytes=incoming_audio, audio_mime=incoming_mime,
                         )
+                    if not isinstance(result, dict):
+                        raise RuntimeError("Phản hồi AI không hợp lệ. Hãy gửi lại tin nhắn.")
                     updated = normalize_percentages(result.get("percentages", {}))
                     st.session_state.formula = updated.copy()
                     for ingredient, value in updated.items():
@@ -520,6 +574,7 @@ with chat_col:
                 except json.JSONDecodeError:
                     st.error("Gemini trả về dữ liệu không đúng JSON. Hãy gửi lại tin nhắn nhé.")
                 except Exception as exc:
+                    # Keep the user's current formula and show a short actionable error.
                     st.error(f"Không thể xử lý cuộc trò chuyện: {exc}")
 
         if st.session_state.chat_error:
