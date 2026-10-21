@@ -80,6 +80,22 @@ st.markdown(
     .status-valid {{ background:rgba(71,89,38,.55); border:1px solid rgba(183,208,122,.45); border-radius:10px; padding:10px; color:#eff7d9; font-size:.85rem; }}
     .safety-note {{ background:#f2d0a3; color:#543017; padding:13px 14px; border-radius:12px; font-size:.87rem; }}
     .safety-note span {{ color:#543017; }}
+    /* Motion nhẹ để giao diện sinh động nhưng không gây nặng máy */
+    @keyframes tvFadeUp {{ from {{ opacity:0; transform:translateY(10px); }} to {{ opacity:1; transform:translateY(0); }} }}
+    @keyframes tvGlow {{ 0%,100% {{ box-shadow:0 6px 18px rgba(128,65,25,.16); }} 50% {{ box-shadow:0 8px 25px rgba(230,157,76,.28); }} }}
+    @keyframes tvLeafFloat {{ 0%,100% {{ transform:translateY(0); }} 50% {{ transform:translateY(-3px); }} }}
+    .app-header {{ animation:tvFadeUp .65s ease-out both; }}
+    .welcome-title {{ animation:tvFadeUp .8s ease-out both; }}
+    .welcome-ornament {{ animation:tvLeafFloat 3.2s ease-in-out infinite; }}
+    div[data-testid="stVerticalBlockBorderWrapper"] {{ animation:tvFadeUp .48s ease-out both; transition:transform .22s ease, border-color .22s ease, box-shadow .22s ease; }}
+    div[data-testid="stVerticalBlockBorderWrapper"]:hover {{ border-color:rgba(240,187,125,.42); box-shadow:0 12px 30px rgba(0,0,0,.23); }}
+    div[data-testid="stButton"] > button, div[data-testid="stDownloadButton"] > button {{ transition:transform .18s ease, filter .18s ease, box-shadow .18s ease; }}
+    div[data-testid="stButton"] > button:hover, div[data-testid="stDownloadButton"] > button:hover {{ transform:translateY(-2px); filter:brightness(1.06); }}
+    div[data-testid="stDownloadButton"] > button {{ background:linear-gradient(110deg,#e8a34c,#f4c276) !important; border:1px solid #f8d49b !important; }}
+    div[data-testid="stDownloadButton"] > button, div[data-testid="stDownloadButton"] > button p, div[data-testid="stDownloadButton"] > button span {{ color:#24160d !important; -webkit-text-fill-color:#24160d !important; font-weight:700 !important; }}
+    [data-testid="stSlider"] [role="slider"] {{ transition:box-shadow .18s ease, transform .18s ease; }}
+    [data-testid="stSlider"] [role="slider"]:hover {{ box-shadow:0 0 0 5px rgba(239,171,83,.2); transform:scale(1.05); }}
+    @media (prefers-reduced-motion: reduce) {{ *, *::before, *::after {{ animation:none !important; transition:none !important; scroll-behavior:auto !important; }} }}
     @media (max-width: 1050px) {{ .block-container {{ padding: .6rem .6rem 1.5rem; }} .app-header {{ padding:15px 8px; }} }}
     @media (max-width: 850px) {{ [data-testid="stHorizontalBlock"] {{ flex-wrap: wrap; }} [data-testid="stHorizontalBlock"] > [data-testid="column"] {{ min-width: 100% !important; }} }}
     </style>
@@ -167,7 +183,11 @@ def call_gemini(prompt, api_key, model, audio_bytes=None, audio_mime="audio/wav"
             response = client.models.generate_content(
                 model=model,
                 contents=contents,
-                config={"response_mime_type": "application/json"},
+                config={
+                    "response_mime_type": "application/json",
+                    "max_output_tokens": 700,
+                    "temperature": 0.25,
+                },
             )
             response_text = getattr(response, "text", None)
             if not response_text:
@@ -203,17 +223,24 @@ def call_gemini(prompt, api_key, model, audio_bytes=None, audio_mime="audio/wav"
 
 def get_ai_suggestion(message, current_values, api_key, model, conversation_history=None, audio_bytes=None, audio_mime="audio/wav"):
     """Return one consultant response and a fresh formula for the current conversation turn."""
+    # Send only a short recent context to reduce input tokens and response latency.
+    recent_history = []
+    for item in (conversation_history or [])[-4:]:
+        if not isinstance(item, dict):
+            continue
+        role = item.get("role", "user")
+        content = str(item.get("content", ""))[:500]
+        if content:
+            recent_history.append({"role": role, "content": content})
     payload = {
-        "current_user_message": message or "",
-        "conversation_history": conversation_history or [],
+        "current_user_message": str(message or "")[:1200],
+        "recent_history": recent_history,
         "current_formula_percent": current_values,
         "available_ingredients": list(DEFAULTS.keys()),
         "task": (
-            "Hãy trò chuyện như một chuyên viên tư vấn nước hoa: luôn gọi người dùng là bạn và xưng mình, "
-            "phản hồi trực tiếp điều người dùng vừa nói, nhớ ngữ cảnh các lượt trước, hỏi thêm khi cần "
-            "và vẫn đề xuất công thức tốt nhất hiện tại. Nội dung phản hồi phải bằng tiếng Việt. "
-            "Nếu có âm thanh đính kèm, hãy nghe và hiểu lời nói trong âm thanh. "
-            "Mỗi lượt phải trả lời tự nhiên, hữu ích, không chỉ lặp lại công thức."
+            "Tư vấn tự nhiên bằng tiếng Việt; xưng mình, gọi người dùng là bạn. "
+            "Trả lời đúng ý mới nhất, dùng ngữ cảnh gần đây, nghe âm thanh nếu có, "
+            "đề xuất công thức hợp lệ và giải thích ngắn gọn."
         ),
     }
     prompt = SYSTEM_PROMPT + "\n\nDữ liệu cuộc trò chuyện hiện tại:\n" + json.dumps(payload, ensure_ascii=False)
@@ -414,7 +441,7 @@ with chat_col:
             elif genai is None:
                 st.error("Chưa cài google-genai. Hãy cài lại các gói trong requirements.txt rồi triển khai app.")
             else:
-                history_for_model = [{"role": item["role"], "content": item["content"]} for item in st.session_state.chat_history[-12:]]
+                history_for_model = [{"role": item["role"], "content": item["content"]} for item in st.session_state.chat_history[-4:]]
                 try:
                     with st.spinner("Thu Vũ đang lắng nghe và tư vấn…"):
                         result = get_ai_suggestion(
