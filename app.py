@@ -126,14 +126,19 @@ st.markdown(
     [data-testid="stSlider"] [role="slider"]:hover {{ box-shadow:0 0 0 5px rgba(239,171,83,.2); transform:scale(1.05); }}
     @media (prefers-reduced-motion: reduce) {{ *, *::before, *::after {{ animation:none !important; transition:none !important; scroll-behavior:auto !important; }} }}
     @media (max-width: 1050px) {{ .block-container {{ padding: .6rem .6rem 1.5rem; }} .app-header {{ padding:15px 8px; }} }}
+    /* Keep the formula first on desktop, but put AI advice first on phones. */
+    @media (min-width: 851px) {{
+      [data-testid="stHorizontalBlock"]:has(.panel-title):has(.tv-avatar-wrap) > [data-testid="column"]:has(.tv-avatar-wrap) {{ order: 2; }}
+      [data-testid="stHorizontalBlock"]:has(.panel-title):has(.tv-avatar-wrap) > [data-testid="column"]:not(:has(.tv-avatar-wrap)) {{ order: 1; }}
+    }}
     @media (max-width: 850px) {{
       .block-container {{ padding: .55rem .55rem 1.2rem; max-width: 100% !important; }}
       /* Mobile: single-column flow; preserve the original wide layout on laptop/tablet. */
       [data-testid="stHorizontalBlock"] {{ flex-wrap: wrap; gap: .65rem !important; }}
       [data-testid="stHorizontalBlock"] > [data-testid="column"] {{ min-width: 100% !important; width:100% !important; flex: 1 1 100% !important; }}
       /* In the main dashboard, show the AI/chat column before the formula column on phones. */
-      [data-testid="stHorizontalBlock"]:has(.tv-avatar-wrap) > [data-testid="column"]:has(.tv-avatar-wrap) {{ order: 1; }}
-      [data-testid="stHorizontalBlock"]:has(.tv-avatar-wrap) > [data-testid="column"]:not(:has(.tv-avatar-wrap)) {{ order: 2; }}
+      [data-testid="stHorizontalBlock"]:has(.panel-title):has(.tv-avatar-wrap) > [data-testid="column"]:has(.tv-avatar-wrap) {{ order: 1; }}
+      [data-testid="stHorizontalBlock"]:has(.panel-title):has(.tv-avatar-wrap) > [data-testid="column"]:not(:has(.tv-avatar-wrap)) {{ order: 2; }}
       [data-testid="stHorizontalBlock"]:has(.tv-avatar-wrap) {{ flex-wrap: wrap !important; align-items: stretch; gap: .65rem !important; }}
       [data-testid="stHorizontalBlock"]:has(.tv-avatar-wrap) > [data-testid="column"]:nth-child(1) {{ flex: 0 0 38% !important; width:38% !important; min-width:0 !important; }}
       [data-testid="stHorizontalBlock"]:has(.tv-avatar-wrap) > [data-testid="column"]:nth-child(2) {{ flex: 1 1 62% !important; width:62% !important; min-width:0 !important; }}
@@ -496,7 +501,7 @@ if st.session_state.main_greeting_pending:
     st.session_state.main_greeting_pending = False
 
 # Main layout: remove the entire left navigation toolbar; keep formula and AI side by side.
-center_col, chat_col = st.columns([1.08, 1.0], gap="medium")
+chat_col, center_col = st.columns([1.0, 1.08], gap="medium")
 
 # Placeholders let the chat be processed before the sliders are created, so AI changes apply immediately.
 with center_col:
