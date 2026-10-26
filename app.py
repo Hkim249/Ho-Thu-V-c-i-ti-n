@@ -77,30 +77,26 @@ st.markdown(
     div[data-testid="stButton"] > button {{ border-radius:11px; border:1px solid rgba(243,180,99,.56); background:linear-gradient(110deg,#8e4a24,#b96d32); color:#fff3df; font-weight:600; min-height:2.5rem; }}
     div[data-testid="stButton"] > button:hover {{ border-color:#ffe2b4; color:white; background:linear-gradient(110deg,#a85a2b,#d28a43); }}
     div[data-testid="stButton"] > button[kind="secondary"] {{ background:rgba(104,72,49,.65); border-color:rgba(231,183,129,.3); }}
-    /* Formula sliders: the entire track stays red from end to end, whether locked or editable. */
-    div[data-testid="stSlider"] [data-baseweb="slider"] {{ opacity:1 !important; }}
+    /* Force the slider rail, filled segment, and thumb to stay red even when Streamlit disables the widget. */
+    div[data-testid="stSlider"] [data-baseweb="slider"] {{ opacity:1 !important; filter:none !important; }}
     div[data-testid="stSlider"] [data-baseweb="slider"] > div,
     div[data-testid="stSlider"] [data-baseweb="slider"] > div > div,
-    div[data-testid="stSlider"] [data-baseweb="slider"] > div > div > div {{ background:#d62828 !important; opacity:1 !important; }}
+    div[data-testid="stSlider"] [data-baseweb="slider"] > div > div > div,
+    div[data-testid="stSlider"] [data-baseweb="slider"] [data-testid="stTickBar"],
+    div[data-testid="stSlider"] [data-baseweb="slider"] [data-testid="stTickBar"] > div {{ background:#d62828 !important; background-color:#d62828 !important; opacity:1 !important; filter:none !important; }}
     div[data-testid="stSlider"] [data-baseweb="slider"] [data-baseweb="thumb"],
-    div[data-testid="stSlider"] [data-baseweb="slider"] [role="slider"] {{ background:#d62828 !important; border:2px solid #ffe1e1 !important; opacity:1 !important; box-shadow:0 0 0 2px rgba(214,40,40,.18) !important; }}
-    /* Formula sliders remain red in both editable and locked states. */
-    div[data-testid="stSlider"] [data-baseweb="slider"] [role="slider"] {{ background:#d62828 !important; border:2px solid #ffe1e1 !important; opacity:1 !important; box-shadow:0 0 0 2px rgba(214,40,40,.18) !important; }}
-    div[data-testid="stSlider"] [data-baseweb="slider"] [data-testid="stTickBar"] {{ background:#d62828 !important; opacity:1 !important; }}
-    div[data-testid="stSlider"] [data-baseweb="slider"] > div {{ opacity:1 !important; }}
-    /* Keep locked formula sliders visibly red instead of adopting Streamlit's disabled grey. */
-    div[data-testid="stSlider"] [data-baseweb="slider"] [aria-disabled="true"],
-    div[data-testid="stSlider"] [data-baseweb="slider"] [role="slider"][disabled] {{ opacity:1 !important; }}
+    div[data-testid="stSlider"] [data-baseweb="slider"] [role="slider"],
     div[data-testid="stSlider"] [data-baseweb="slider"] [role="slider"][aria-disabled="true"],
-    div[data-testid="stSlider"] [data-baseweb="slider"] [role="slider"][disabled] {{ background:#d62828 !important; border:2px solid #ffe1e1 !important; opacity:1 !important; box-shadow:0 0 0 2px rgba(214,40,40,.18) !important; }}
-    div[data-testid="stSlider"] [data-baseweb="slider"] [data-testid="stTickBar"] {{ opacity:1 !important; }}
+    div[data-testid="stSlider"] [data-baseweb="slider"] [role="slider"][disabled],
+    div[data-testid="stSlider"] [data-baseweb="slider"] [data-baseweb="thumb"][aria-disabled="true"] {{ background:#d62828 !important; background-color:#d62828 !important; border:2px solid #ffe1e1 !important; opacity:1 !important; filter:none !important; box-shadow:0 0 0 2px rgba(214,40,40,.18) !important; }}
     div[data-testid="stSlider"] [data-baseweb="slider"]:has([aria-disabled="true"]),
-    div[data-testid="stSlider"] [data-baseweb="slider"]:has([role="slider"][disabled]) {{ opacity:1 !important; }}
-    div[data-testid="stSlider"] [data-baseweb="slider"]:has([aria-disabled="true"]) > div,
-    div[data-testid="stSlider"] [data-baseweb="slider"]:has([role="slider"][disabled]) > div {{ background:#d62828 !important; }}
-    div[data-testid="stSlider"]:has([aria-disabled="true"]) [data-baseweb="thumb"],
-    div[data-testid="stSlider"]:has([role="slider"][disabled]) [data-baseweb="thumb"] {{ background:#d62828 !important; border-color:#ffe1e1 !important; }}
-    div[data-testid="stSlider"] [data-testid="stTickBar"] {{ background:#a7774a; }}
+    div[data-testid="stSlider"] [data-baseweb="slider"]:has([role="slider"][disabled]),
+    div[data-testid="stSlider"]:has([aria-disabled="true"]),
+    div[data-testid="stSlider"]:has([role="slider"][disabled]) {{ opacity:1 !important; filter:none !important; }}
+    div[data-testid="stSlider"] [data-baseweb="slider"] [aria-disabled="true"],
+    div[data-testid="stSlider"] [data-baseweb="slider"] [disabled] {{ opacity:1 !important; filter:none !important; }}
+    /* Prevent later generic tick-bar styling from changing the formula slider color. */
+    div[data-testid="stSlider"] [data-testid="stTickBar"] {{ background:#d62828 !important; background-color:#d62828 !important; opacity:1 !important; }}
     div[data-testid="stNumberInput"] input {{ background:#fff1dd !important; color:#2c1a10 !important; border-radius:9px; }}
     [data-testid="stTextArea"] textarea,[data-testid="stTextInput"] input,[data-testid="stChatInput"] textarea,[data-testid="stChatInputTextArea"],[data-testid="stChatInput"] input,[data-baseweb="textarea"] textarea,[data-baseweb="input"] input,[data-testid="stChatInput"] div[contenteditable="true"] {{ background:#fff2df !important; color:#20150f !important; -webkit-text-fill-color:#20150f !important; caret-color:#20150f !important; opacity:1 !important; border-radius:12px !important; }}
     [data-testid="stTextArea"] textarea::placeholder,[data-testid="stChatInput"] textarea::placeholder,[data-testid="stChatInputTextArea"]::placeholder,[data-testid="stChatInput"] input::placeholder,[data-testid="stChatInput"] div[contenteditable="true"]:empty::before {{ color:#7a6250 !important; -webkit-text-fill-color:#7a6250 !important; opacity:1 !important; }}
