@@ -77,6 +77,13 @@ st.markdown(
     div[data-testid="stButton"] > button {{ border-radius:11px; border:1px solid rgba(243,180,99,.56); background:linear-gradient(110deg,#8e4a24,#b96d32); color:#fff3df; font-weight:600; min-height:2.5rem; }}
     div[data-testid="stButton"] > button:hover {{ border-color:#ffe2b4; color:white; background:linear-gradient(110deg,#a85a2b,#d28a43); }}
     div[data-testid="stButton"] > button[kind="secondary"] {{ background:rgba(104,72,49,.65); border-color:rgba(231,183,129,.3); }}
+    /* Formula sliders: the entire track stays red from end to end, whether locked or editable. */
+    div[data-testid="stSlider"] [data-baseweb="slider"] {{ opacity:1 !important; }}
+    div[data-testid="stSlider"] [data-baseweb="slider"] > div,
+    div[data-testid="stSlider"] [data-baseweb="slider"] > div > div,
+    div[data-testid="stSlider"] [data-baseweb="slider"] > div > div > div {{ background:#d62828 !important; opacity:1 !important; }}
+    div[data-testid="stSlider"] [data-baseweb="slider"] [data-baseweb="thumb"],
+    div[data-testid="stSlider"] [data-baseweb="slider"] [role="slider"] {{ background:#d62828 !important; border:2px solid #ffe1e1 !important; opacity:1 !important; box-shadow:0 0 0 2px rgba(214,40,40,.18) !important; }}
     /* Formula sliders remain red in both editable and locked states. */
     div[data-testid="stSlider"] [data-baseweb="slider"] [role="slider"] {{ background:#d62828 !important; border:2px solid #ffe1e1 !important; opacity:1 !important; box-shadow:0 0 0 2px rgba(214,40,40,.18) !important; }}
     div[data-testid="stSlider"] [data-baseweb="slider"] [data-testid="stTickBar"] {{ background:#d62828 !important; opacity:1 !important; }}
