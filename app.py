@@ -395,6 +395,8 @@ def generate_vietnamese_audio(text_to_speak):
 
 if "formula" not in st.session_state:
     st.session_state.formula = DEFAULTS.copy()
+if "formula_edit_mode" not in st.session_state:
+    st.session_state.formula_edit_mode = False
 if "ai_result" not in st.session_state:
     st.session_state.ai_result = None
 if "ai_audio" not in st.session_state:
@@ -586,6 +588,7 @@ with chat_col:
                         raise RuntimeError("Phản hồi AI không hợp lệ. Hãy gửi lại tin nhắn.")
                     updated = normalize_percentages(result.get("percentages", {}))
                     st.session_state.formula = updated.copy()
+                    st.session_state.formula_edit_mode = False
                     for ingredient, value in updated.items():
                         st.session_state[f"slider_{ingredient}"] = float(value)
                     assistant_reply = str(result.get("spoken_response") or result.get("summary") or "Mình đã cập nhật công thức theo yêu cầu của bạn.").strip()
@@ -629,9 +632,19 @@ with chat_col:
 # Formula controls, rendered into their placeholder after chat processing.
 with formula_slot.container():
     with st.container(border=True):
-        st.markdown('<div class="panel-title">🍃 Tùy chỉnh công thức</div>', unsafe_allow_html=True)
-        batch_ml = st.slider("Dung tích pha chế (mL)", min_value=1, max_value=20, value=int(st.session_state.get("batch_ml", 10)), step=1, key="batch_ml")
-        st.markdown('<div style="display:flex;justify-content:space-between;color:#d9b995;font-size:.78rem;margin-top:-8px"><span>1 mL</span><span>20 mL</span></div>', unsafe_allow_html=True)
+        has_ai_formula = st.session_state.get("ai_result") is not None
+        editing_formula = bool(st.session_state.formula_edit_mode)
+        st.markdown('<div class="panel-title">🍃 Công thức nước hoa</div>', unsafe_allow_html=True)
+        if has_ai_formula and not editing_formula:
+            st.caption("🔒 Công thức AI đã được khóa để tránh thay đổi ngoài ý muốn.")
+        elif has_ai_formula and editing_formula:
+            st.caption("✏️ Chế độ chỉnh sửa đang bật. Các thay đổi chỉ cần đảm bảo công thức hợp lệ về mặt toán học.")
+        batch_ml = st.slider(
+            "Dung tích pha chế (mL)", min_value=1, max_value=10,
+            value=min(10, max(1, int(st.session_state.get("batch_ml", 10)))), step=1,
+            key="batch_ml", disabled=(has_ai_formula and not editing_formula),
+        )
+        st.markdown('<div style="display:flex;justify-content:space-between;color:#d9b995;font-size:.78rem;margin-top:-8px"><span>1 mL</span><span>10 mL (tối đa)</span></div>', unsafe_allow_html=True)
         edited = {}
         for name, default in DEFAULTS.items():
             slider_key = f"slider_{name}"
@@ -640,9 +653,19 @@ with formula_slot.container():
             edited[name] = st.slider(
                 f"{name} ({LAYERS[name]}) (%)", min_value=0.0,
                 max_value=10.0, step=0.01,
-                key=slider_key,
+                key=slider_key, disabled=(has_ai_formula and not editing_formula),
             )
         st.session_state.formula = edited.copy()
+        if has_ai_formula:
+            if not editing_formula:
+                if st.button("✏️ Chỉnh sửa công thức", key="enable_formula_edit", use_container_width=True):
+                    st.session_state.formula_edit_mode = True
+                    st.rerun()
+            else:
+                if st.button("🔒 Hoàn tất chỉnh sửa", key="finish_formula_edit", use_container_width=True):
+                    st.session_state.formula_edit_mode = False
+                    st.rerun()
+        st.caption("Khi đổi dung tích, tỷ lệ phần trăm của công thức được giữ nguyên; thể tích mL của từng thành phần và dung môi sẽ tự tính lại theo dung tích mới.")
         st.markdown('</div>', unsafe_allow_html=True)
 
 formula = {name: float(st.session_state.get(f"slider_{name}", st.session_state.formula[name])) for name in DEFAULTS}
