@@ -77,7 +77,10 @@ st.markdown(
     div[data-testid="stButton"] > button {{ border-radius:11px; border:1px solid rgba(243,180,99,.56); background:linear-gradient(110deg,#8e4a24,#b96d32); color:#fff3df; font-weight:600; min-height:2.5rem; }}
     div[data-testid="stButton"] > button:hover {{ border-color:#ffe2b4; color:white; background:linear-gradient(110deg,#a85a2b,#d28a43); }}
     div[data-testid="stButton"] > button[kind="secondary"] {{ background:rgba(104,72,49,.65); border-color:rgba(231,183,129,.3); }}
-    div[data-testid="stSlider"] [data-baseweb="slider"] div[role="slider"] {{ background:#f2b65e; border:2px solid #fff0d2; }}
+    /* Formula sliders remain red in both editable and locked states. */
+    div[data-testid="stSlider"] [data-baseweb="slider"] [role="slider"] {{ background:#d62828 !important; border:2px solid #ffe1e1 !important; opacity:1 !important; box-shadow:0 0 0 2px rgba(214,40,40,.18) !important; }}
+    div[data-testid="stSlider"] [data-baseweb="slider"] [data-testid="stTickBar"] {{ background:#d62828 !important; opacity:1 !important; }}
+    div[data-testid="stSlider"] [data-baseweb="slider"] > div {{ opacity:1 !important; }}
     /* Keep locked formula sliders visibly red instead of adopting Streamlit's disabled grey. */
     div[data-testid="stSlider"] [data-baseweb="slider"] [aria-disabled="true"],
     div[data-testid="stSlider"] [data-baseweb="slider"] [role="slider"][disabled] {{ opacity:1 !important; }}
@@ -668,9 +671,7 @@ with formula_slot.container():
         has_ai_formula = st.session_state.get("ai_result") is not None
         editing_formula = bool(st.session_state.formula_edit_mode)
         st.markdown('<div class="panel-title">🍃 Công thức nước hoa</div>', unsafe_allow_html=True)
-        if has_ai_formula and not editing_formula:
-            st.caption("🔒 Công thức AI đã được khóa để tránh thay đổi ngoài ý muốn.")
-        elif has_ai_formula and editing_formula:
+        if has_ai_formula and editing_formula:
             st.caption("✏️ Chế độ chỉnh sửa đang bật. Các thay đổi chỉ cần đảm bảo công thức hợp lệ về mặt toán học.")
         batch_ml = st.slider(
             "Dung tích pha chế (mL)", min_value=1, max_value=10,
@@ -699,7 +700,6 @@ with formula_slot.container():
                 if st.button("🔒 Hoàn tất chỉnh sửa", key="finish_formula_edit", use_container_width=True):
                     st.session_state.formula_edit_mode = False
                     st.rerun()
-        st.caption("Khi đổi dung tích, tỷ lệ phần trăm của từng thành phần được tự điều chỉnh theo tỷ lệ dung tích mới/cũ (ví dụ 10 mL: 8% cam → 5 mL: 4% cam); thể tích mL và phần dung môi được tính lại tương ứng. Mỗi thanh tinh dầu/chất định hương vẫn tối đa 10%.")
         st.markdown('</div>', unsafe_allow_html=True)
 
 formula = {name: float(st.session_state.get(f"slider_{name}", st.session_state.formula[name])) for name in DEFAULTS}
