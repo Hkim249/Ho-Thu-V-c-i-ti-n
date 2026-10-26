@@ -78,6 +78,18 @@ st.markdown(
     div[data-testid="stButton"] > button:hover {{ border-color:#ffe2b4; color:white; background:linear-gradient(110deg,#a85a2b,#d28a43); }}
     div[data-testid="stButton"] > button[kind="secondary"] {{ background:rgba(104,72,49,.65); border-color:rgba(231,183,129,.3); }}
     div[data-testid="stSlider"] [data-baseweb="slider"] div[role="slider"] {{ background:#f2b65e; border:2px solid #fff0d2; }}
+    /* Keep locked formula sliders visibly red instead of adopting Streamlit's disabled grey. */
+    div[data-testid="stSlider"] [data-baseweb="slider"] [aria-disabled="true"],
+    div[data-testid="stSlider"] [data-baseweb="slider"] [role="slider"][disabled] {{ opacity:1 !important; }}
+    div[data-testid="stSlider"] [data-baseweb="slider"] [role="slider"][aria-disabled="true"],
+    div[data-testid="stSlider"] [data-baseweb="slider"] [role="slider"][disabled] {{ background:#d62828 !important; border:2px solid #ffe1e1 !important; opacity:1 !important; box-shadow:0 0 0 2px rgba(214,40,40,.18) !important; }}
+    div[data-testid="stSlider"] [data-baseweb="slider"] [data-testid="stTickBar"] {{ opacity:1 !important; }}
+    div[data-testid="stSlider"] [data-baseweb="slider"]:has([aria-disabled="true"]),
+    div[data-testid="stSlider"] [data-baseweb="slider"]:has([role="slider"][disabled]) {{ opacity:1 !important; }}
+    div[data-testid="stSlider"] [data-baseweb="slider"]:has([aria-disabled="true"]) > div,
+    div[data-testid="stSlider"] [data-baseweb="slider"]:has([role="slider"][disabled]) > div {{ background:#d62828 !important; }}
+    div[data-testid="stSlider"]:has([aria-disabled="true"]) [data-baseweb="thumb"],
+    div[data-testid="stSlider"]:has([role="slider"][disabled]) [data-baseweb="thumb"] {{ background:#d62828 !important; border-color:#ffe1e1 !important; }}
     div[data-testid="stSlider"] [data-testid="stTickBar"] {{ background:#a7774a; }}
     div[data-testid="stNumberInput"] input {{ background:#fff1dd !important; color:#2c1a10 !important; border-radius:9px; }}
     [data-testid="stTextArea"] textarea,[data-testid="stTextInput"] input,[data-testid="stChatInput"] textarea,[data-testid="stChatInputTextArea"],[data-testid="stChatInput"] input,[data-baseweb="textarea"] textarea,[data-baseweb="input"] input,[data-testid="stChatInput"] div[contenteditable="true"] {{ background:#fff2df !important; color:#20150f !important; -webkit-text-fill-color:#20150f !important; caret-color:#20150f !important; opacity:1 !important; border-radius:12px !important; }}
@@ -393,12 +405,33 @@ def generate_vietnamese_audio(text_to_speak):
     # Streamlit normally runs without an active asyncio loop in this script context.
     return asyncio.run(_generate_vietnamese_audio(text_to_speak))
 
+def scale_formula_for_batch_change():
+    """Scale ingredient percentages in proportion to the selected batch size."""
+    new_batch = max(1, min(10, int(st.session_state.get("batch_ml", 10))))
+    old_batch = max(1, min(10, int(st.session_state.get("last_batch_ml", 10))))
+    if new_batch != old_batch:
+        ratio = new_batch / old_batch
+        current_formula = {}
+        for ingredient, default in DEFAULTS.items():
+            key = f"slider_{ingredient}"
+            current_value = float(st.session_state.get(key, st.session_state.get("formula", {}).get(ingredient, default)))
+            scaled_value = round(max(0.0, min(10.0, current_value * ratio)), 2)
+            st.session_state[key] = scaled_value
+            current_formula[ingredient] = scaled_value
+        st.session_state.formula = current_formula
+    st.session_state.last_batch_ml = new_batch
+
+
 if "formula" not in st.session_state:
     st.session_state.formula = DEFAULTS.copy()
 if "formula_edit_mode" not in st.session_state:
     st.session_state.formula_edit_mode = False
 if "ai_result" not in st.session_state:
     st.session_state.ai_result = None
+if "batch_ml" not in st.session_state:
+    st.session_state.batch_ml = 10
+if "last_batch_ml" not in st.session_state:
+    st.session_state.last_batch_ml = int(st.session_state.get("batch_ml", 10))
 if "ai_audio" not in st.session_state:
     st.session_state.ai_audio = None
 if "ai_audio_text" not in st.session_state:
@@ -643,6 +676,7 @@ with formula_slot.container():
             "Dung tích pha chế (mL)", min_value=1, max_value=10,
             value=min(10, max(1, int(st.session_state.get("batch_ml", 10)))), step=1,
             key="batch_ml", disabled=(has_ai_formula and not editing_formula),
+            on_change=scale_formula_for_batch_change,
         )
         st.markdown('<div style="display:flex;justify-content:space-between;color:#d9b995;font-size:.78rem;margin-top:-8px"><span>1 mL</span><span>10 mL (tối đa)</span></div>', unsafe_allow_html=True)
         edited = {}
@@ -665,7 +699,7 @@ with formula_slot.container():
                 if st.button("🔒 Hoàn tất chỉnh sửa", key="finish_formula_edit", use_container_width=True):
                     st.session_state.formula_edit_mode = False
                     st.rerun()
-        st.caption("Khi đổi dung tích, tỷ lệ phần trăm của công thức được giữ nguyên; thể tích mL của từng thành phần và dung môi sẽ tự tính lại theo dung tích mới.")
+        st.caption("Khi đổi dung tích, tỷ lệ phần trăm của từng thành phần được tự điều chỉnh theo tỷ lệ dung tích mới/cũ (ví dụ 10 mL: 8% cam → 5 mL: 4% cam); thể tích mL và phần dung môi được tính lại tương ứng. Mỗi thanh tinh dầu/chất định hương vẫn tối đa 10%.")
         st.markdown('</div>', unsafe_allow_html=True)
 
 formula = {name: float(st.session_state.get(f"slider_{name}", st.session_state.formula[name])) for name in DEFAULTS}
